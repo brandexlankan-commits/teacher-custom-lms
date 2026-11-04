@@ -8,7 +8,8 @@ import {
   Settings, CheckCircle2, XCircle, ExternalLink, 
   GraduationCap, ArrowLeft, Loader2, KeyRound, 
   Radio, Share2, Layers, AlertCircle, Smartphone, 
-  Unlock, CreditCard, PlaySquare, FileText, Trash2
+  Unlock, CreditCard, PlaySquare, FileText, Trash2,
+  Copy, Key
 } from 'lucide-react';
 
 export default function TeacherMasterDashboard() {
@@ -52,6 +53,8 @@ export default function TeacherMasterDashboard() {
   const [studentName, setStudentName] = useState('');
   const [studentPhone, setStudentPhone] = useState('');
   const [studentIndex, setStudentIndex] = useState('');
+  const [studentCustomPass, setStudentCustomPass] = useState('');
+
   const [materialTitle, setMaterialTitle] = useState('');
   const [materialUrl, setMaterialUrl] = useState('');
   const [recordingTitle, setRecordingTitle] = useState('');
@@ -213,25 +216,58 @@ export default function TeacherMasterDashboard() {
     alert('WhatsApp ආරාධනා පණිවිඩය සාර්ථකව Copy විය!');
   };
 
-  // Student Actions
+  // Student Actions: Auto Generate Username & Password
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentName || !selectedCourse) return;
-    const { data: newStu } = await supabase.from('students').insert([{
-      index_number: studentIndex || `ST-${Math.floor(1000 + Math.random() * 9000)}`,
-      full_name: studentName,
-      whatsapp_number: studentPhone || '0770000000',
-      grade: selectedCourse.grade
+
+    // Auto-generate credentials if not given
+    const autoIndex = studentIndex.trim() || `ST-${Math.floor(1000 + Math.random() * 9000)}`;
+    const autoPassword = studentCustomPass.trim() || Math.floor(100000 + Math.random() * 900000).toString();
+
+    const { data: newStu, error: err } = await supabase.from('students').insert([{
+      index_number: autoIndex,
+      full_name: studentName.trim(),
+      whatsapp_number: studentPhone.trim() || '0770000000',
+      grade: selectedCourse.grade,
+      password: autoPassword
     }]).select().single();
 
-    if (newStu) {
+    if (newStu && !err) {
       await supabase.from('enrollments').insert([{ student_id: newStu.id, course_id: selectedCourse.id, is_active: true }]);
       setStudentName('');
       setStudentPhone('');
       setStudentIndex('');
-      loadCourseDetails(selectedCourse.id);
-      alert('ශිෂ්‍යයා සාර්ථකව පන්තියට ඇතුළත් කරන ලදී!');
+      setStudentCustomPass('');
+      await loadCourseDetails(selectedCourse.id);
+
+      // Copy credentials to clipboard immediately
+      const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
+        `ඔබගේ ශිෂ්‍ය ගිණුමේ විස්තර (Login Details):\n` +
+        `🔗 Student Portal: ${window.location.origin}/student\n` +
+        `👤 Username (Index No): *${newStu.index_number}*\n` +
+        `🔑 Password: *${newStu.password || autoPassword}*\n\n` +
+        `⚠️ කරුණාකර මෙම තොරතුරු ඔබගේ දුරකථනයෙන් හෝ පරිගණකයෙන් ඇතුළත් කර Login වන්න. (පළමු වර Log වන Device එකට පමණක් ඔබගේ ගිණුම සීමා වේ)`;
+
+      navigator.clipboard.writeText(credText);
+      alert(`ශිෂ්‍යයා සාර්ථකව Enroll විය!\n\nUsername: ${newStu.index_number}\nPassword: ${newStu.password || autoPassword}\n\n(WhatsApp Login Message එක දැනටමත් Copy වී ඇත)`);
+    } else {
+      alert('Enrollment Error: ' + (err?.message || 'දෝෂයක් මතු විය'));
     }
+  };
+
+  // 1-Click WhatsApp Login Share for individual students
+  const handleCopyStudentLogin = (st: any) => {
+    if (!selectedCourse) return;
+    const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
+      `ඔබගේ ශිෂ්‍ය ගිණුමේ විස්තර (Login Details):\n` +
+      `🔗 Student Portal: ${window.location.origin}/student\n` +
+      `👤 Username (Index No): *${st.index_number}*\n` +
+      `🔑 Password: *${st.password || st.whatsapp_number || '123456'}*\n\n` +
+      `⚠️ කරුණාකර මෙම තොරතුරු ඔබගේ දුරකථනයෙන් හෝ පරිගණකයෙන් ඇතුළත් කර Login වන්න. (පළමු වර Log වන Device එකට පමණක් ඔබගේ ගිණුම සීමා වේ)`;
+
+    navigator.clipboard.writeText(credText);
+    alert(`${st.full_name} සිසුවාගේ Login Details (WhatsApp Message) Copy කරගන්නා ලදී!`);
   };
 
   // Student Action: Device Unlock
@@ -250,7 +286,6 @@ export default function TeacherMasterDashboard() {
     e.preventDefault();
     if (!recordingTitle || !recordingId || !selectedCourse) return;
     
-    // YouTube link හෝ ID පිරිසිදු කරගැනීම
     let cleanId = recordingId.trim();
     if (cleanId.includes('v=')) {
       cleanId = cleanId.split('v=')[1].split('&')[0];
@@ -482,7 +517,6 @@ export default function TeacherMasterDashboard() {
         {/* SINGLE CLASS HUB */}
         {mainView === 'classes' && selectedCourse && (
           <div className="space-y-6">
-            {/* Header info */}
             <div className="bg-[#0c1322] p-6 rounded-3xl border border-slate-800/80 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <button onClick={() => setSelectedCourse(null)} className="text-xs text-purple-400 hover:underline mb-1 flex items-center gap-1 cursor-pointer">
@@ -624,7 +658,7 @@ export default function TeacherMasterDashboard() {
               </div>
             )}
 
-            {/* TAB 2: COMPLETE STUDENT MANAGEMENT (Unlock Device + Payment Status + Bank Slips) */}
+            {/* TAB 2: STUDENT MANAGEMENT WITH CREDENTIALS & 1-CLICK SHARE */}
             {activeTab === 'students' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -633,54 +667,95 @@ export default function TeacherMasterDashboard() {
                     <h3 className="font-bold text-sm text-white flex items-center gap-2">
                       <Plus className="w-4 h-4 text-purple-400" /> Enroll New Student
                     </h3>
-                    <input
-                      type="text" placeholder="Full Name" value={studentName} onChange={(e) => setStudentName(e.target.value)}
-                      className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
-                    />
-                    <input
-                      type="text" placeholder="WhatsApp Number (077...)" value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)}
-                      className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
-                    />
-                    <input
-                      type="text" placeholder="Index No (Optional)" value={studentIndex} onChange={(e) => setStudentIndex(e.target.value)}
-                      className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
-                    />
-                    <button type="submit" className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
-                      Enroll to this Class
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      නම සහ WhatsApp අංකය ලබා දෙන්න. Username සහ Password පද්ධතියෙන්ම Auto-Generate වේ.
+                    </p>
+
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Full Name</label>
+                      <input
+                        type="text" placeholder="e.g. Kasun Madushanka" value={studentName} onChange={(e) => setStudentName(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">WhatsApp Number</label>
+                      <input
+                        type="text" placeholder="0771234567" value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold mb-1 block">Index Number (Optional)</label>
+                      <input
+                        type="text" placeholder="හිස්ව තැබුවහොත් Auto-Generate වේ" value={studentIndex} onChange={(e) => setStudentIndex(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700/60 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold mb-1 block">Custom Password (Optional)</label>
+                      <input
+                        type="text" placeholder="හිස්ව තැබුවහොත් 6-digit PIN එකක් ලැබේ" value={studentCustomPass} onChange={(e) => setStudentCustomPass(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700/60 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-600"
+                      />
+                    </div>
+
+                    <button type="submit" className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-purple-600/30">
+                      Enroll & Generate Login Credentials
                     </button>
                   </form>
 
-                  {/* Enrolled Students with Device Unlock */}
+                  {/* Enrolled Students List with Login Credentials & Actions */}
                   <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                     <div className="flex items-center justify-between">
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Device Security
+                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Credentials
                       </h3>
-                      <span className="text-xs text-slate-400">{students.length} Total</span>
+                      <span className="text-xs text-slate-400">{students.length} Total Enrolled</span>
                     </div>
 
                     {students.length === 0 ? (
-                      <p className="text-xs text-slate-500 py-8 text-center">තවම සිසුන් ලියාපදිංචි කර නැත.</p>
+                      <p className="text-xs text-slate-500 py-8 text-center">තවම කිසිදු ශිෂ්‍යයෙක් ලියාපදිංචි කර නැත.</p>
                     ) : (
-                      <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                      <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
                         {students.map((st) => (
-                          <div key={st.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="space-y-1">
-                              <h4 className="font-bold text-xs text-white flex items-center gap-2">
+                          <div key={st.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-1.5">
+                              <h4 className="font-bold text-sm text-white flex items-center gap-2">
                                 {st.full_name}
-                                <span className="text-[10px] text-purple-400 font-mono bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
-                                  {st.index_number}
-                                </span>
                               </h4>
-                              <p className="text-[11px] text-slate-400 font-mono">📱 WhatsApp: {st.whatsapp_number}</p>
+                              
+                              <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                                <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-purple-400">
+                                  User: <strong>{st.index_number}</strong>
+                                </span>
+                                <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-emerald-400 flex items-center gap-1">
+                                  <Key className="w-3 h-3" /> Pass: <strong>{st.password || st.whatsapp_number || '123456'}</strong>
+                                </span>
+                                <span className="text-slate-400 text-[11px]">
+                                  📱 {st.whatsapp_number}
+                                </span>
+                              </div>
                             </div>
 
-                            {/* Device Unlock Button */}
+                            {/* Actions: Copy WhatsApp Login + Device Unlock */}
                             <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleCopyStudentLogin(st)}
+                                title="Login Details WhatsApp Message එක Copy කරගන්න"
+                                className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copy Login</span>
+                              </button>
+
                               <button
                                 onClick={() => handleUnlockDevice(st.id)}
                                 title="Device reset කර ශිෂ්‍යයාට නව Device එකකින් ලොග් වීමට අවසර දෙන්න"
-                                className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                                className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
                               >
                                 <Unlock className="w-3.5 h-3.5" />
                                 <span>Unlock Device</span>
@@ -757,7 +832,7 @@ export default function TeacherMasterDashboard() {
               </div>
             )}
 
-            {/* TAB 3: LESSON RECORDINGS (Dedicated Section) */}
+            {/* TAB 3: LESSON RECORDINGS */}
             {activeTab === 'recordings' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <form onSubmit={handleAddRecording} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
