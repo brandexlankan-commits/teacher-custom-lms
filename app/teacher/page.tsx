@@ -5,15 +5,14 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { 
   Users, BookOpen, Video, HelpCircle, Plus, 
-  Settings, CheckCircle2, Copy, ExternalLink, 
+  Settings, CheckCircle2, XCircle, ExternalLink, 
   GraduationCap, ArrowLeft, Loader2, KeyRound, 
-  Radio, Share2, Layers, AlertCircle
+  Radio, Share2, Layers, AlertCircle, Smartphone, 
+  Unlock, CreditCard, PlaySquare, FileText, Trash2
 } from 'lucide-react';
 
 export default function TeacherMasterDashboard() {
-  // Main Navigation: Classes or Zoom Settings
   const [mainView, setMainView] = useState<'classes' | 'zoom_config'>('classes');
-
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +33,7 @@ export default function TeacherMasterDashboard() {
 
   // Selected Course Management State
   const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
-  const [activeTab, setActiveTab] = useState<'zoom' | 'students' | 'content' | 'quizzes' | 'slips'>('zoom');
+  const [activeTab, setActiveTab] = useState<'zoom' | 'students' | 'recordings' | 'content' | 'quizzes'>('zoom');
 
   // Zoom Meeting Creator inside Course Hub
   const [meetingTopic, setMeetingTopic] = useState('');
@@ -62,8 +61,6 @@ export default function TeacherMasterDashboard() {
   const [qText, setQText] = useState('');
   const [opt0, setOpt0] = useState('');
   const [opt1, setOpt1] = useState('');
-  const [opt2, setOpt2] = useState('');
-  const [opt3, setOpt3] = useState('');
   const [correctOpt, setCorrectOpt] = useState('0');
 
   useEffect(() => {
@@ -114,7 +111,7 @@ export default function TeacherMasterDashboard() {
 
     if (!err) {
       setIsZoomConfigured(true);
-      alert('Zoom API තොරතුරු සාර්ථකව සුරැකිණි! දැන් ඔබට ඕනෑම පන්තියක් සඳහා Meeting Generate කළ හැක.');
+      alert('Zoom API Credentials සාර්ථකව සුරැකිණි!');
       setMainView('classes');
     } else {
       alert('Error: ' + err.message);
@@ -155,16 +152,16 @@ export default function TeacherMasterDashboard() {
     const { data: enr } = await supabase.from('enrollments').select('student_id, is_active, students(*)').eq('course_id', courseId);
     if (enr) setStudents(enr.map(e => ({ ...e.students, is_active: e.is_active })));
 
-    const { data: mat } = await supabase.from('materials').select('*').eq('course_id', courseId);
+    const { data: mat } = await supabase.from('materials').select('*').eq('course_id', courseId).order('created_at', { ascending: false });
     if (mat) setMaterials(mat);
 
-    const { data: rec } = await supabase.from('recordings').select('*').eq('course_id', courseId);
+    const { data: rec } = await supabase.from('recordings').select('*').eq('course_id', courseId).order('uploaded_at', { ascending: false });
     if (rec) setRecordings(rec);
 
     const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', courseId);
     if (qz) setQuizzes(qz);
 
-    const { data: slp } = await supabase.from('slips').select('*, students(full_name, index_number)').eq('course_id', courseId);
+    const { data: slp } = await supabase.from('slips').select('*, students(full_name, index_number, whatsapp_number)').eq('course_id', courseId).order('submitted_at', { ascending: false });
     if (slp) setSlips(slp);
   };
 
@@ -173,13 +170,12 @@ export default function TeacherMasterDashboard() {
     if (!selectedCourse) return;
 
     if (!isZoomConfigured) {
-      alert('කරුණාකර මුලින්ම "Zoom Account" ටැබ් එක වෙත ගොස් ඔබගේ Zoom Credentials ලබා දී Save කරන්න.');
+      alert('කරුණාකර මුලින්ම Zoom Account ටැබ් එකට ගොස් ඔබගේ Zoom Credentials ඇතුළත් කර Save කරන්න.');
       setMainView('zoom_config');
       return;
     }
 
     setIsCreatingMeeting(true);
-
     try {
       const res = await fetch('/api/zoom', {
         method: 'POST',
@@ -192,10 +188,7 @@ export default function TeacherMasterDashboard() {
       });
 
       const resData = await res.json();
-
-      if (!res.ok) {
-        throw new Error(resData.error || 'Meeting creation failed');
-      }
+      if (!res.ok) throw new Error(resData.error || 'Meeting එක සාදා ගැනීමට නොහැකි විය');
 
       await loadCourseDetails(selectedCourse.id);
       alert('Zoom Live Meeting සාර්ථකව නිර්මාණය විය!');
@@ -220,6 +213,7 @@ export default function TeacherMasterDashboard() {
     alert('WhatsApp ආරාධනා පණිවිඩය සාර්ථකව Copy විය!');
   };
 
+  // Student Actions
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentName || !selectedCourse) return;
@@ -236,10 +230,55 @@ export default function TeacherMasterDashboard() {
       setStudentPhone('');
       setStudentIndex('');
       loadCourseDetails(selectedCourse.id);
-      alert('ශිෂ්‍යයා ලියාපදිංචි කරන ලදී!');
+      alert('ශිෂ්‍යයා සාර්ථකව පන්තියට ඇතුළත් කරන ලදී!');
     }
   };
 
+  // Student Action: Device Unlock
+  const handleUnlockDevice = async (studentId: string) => {
+    const { error } = await supabase.from('students').update({ device_id: null }).eq('id', studentId);
+    if (!error) {
+      alert('Device එක සාර්ථකව Unlock කරන ලදී! ශිෂ්‍යයාට නව Device එකකින් ලොග් විය හැක.');
+      loadCourseDetails(selectedCourse.id);
+    } else {
+      alert('Unlock Error: ' + error.message);
+    }
+  };
+
+  // Recording Actions
+  const handleAddRecording = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recordingTitle || !recordingId || !selectedCourse) return;
+    
+    // YouTube link හෝ ID පිරිසිදු කරගැනීම
+    let cleanId = recordingId.trim();
+    if (cleanId.includes('v=')) {
+      cleanId = cleanId.split('v=')[1].split('&')[0];
+    } else if (cleanId.includes('youtu.be/')) {
+      cleanId = cleanId.split('youtu.be/')[1].split('?')[0];
+    }
+
+    const { error } = await supabase.from('recordings').insert([{
+      course_id: selectedCourse.id,
+      title: recordingTitle,
+      youtube_video_id: cleanId
+    }]);
+
+    if (!error) {
+      setRecordingTitle('');
+      setRecordingId('');
+      loadCourseDetails(selectedCourse.id);
+      alert('Recording එක සාර්ථකව එකතු විය!');
+    }
+  };
+
+  const handleDeleteRecording = async (recId: string) => {
+    if (!confirm('මෙම Recording එක ඉවත් කිරීමට අවශ්‍යද?')) return;
+    await supabase.from('recordings').delete().eq('id', recId);
+    loadCourseDetails(selectedCourse.id);
+  };
+
+  // Materials & Quizzes
   const handleAddMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!materialTitle || !materialUrl || !selectedCourse) return;
@@ -247,17 +286,7 @@ export default function TeacherMasterDashboard() {
     setMaterialTitle('');
     setMaterialUrl('');
     loadCourseDetails(selectedCourse.id);
-    alert('Tute එකතු විය!');
-  };
-
-  const handleAddRecording = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!recordingTitle || !recordingId || !selectedCourse) return;
-    await supabase.from('recordings').insert([{ course_id: selectedCourse.id, title: recordingTitle, youtube_video_id: recordingId }]);
-    setRecordingTitle('');
-    setRecordingId('');
-    loadCourseDetails(selectedCourse.id);
-    alert('Recording එකතු විය!');
+    alert('Tute එක සාර්ථකව Upload විය!');
   };
 
   const handleCreateQuiz = async (e: React.FormEvent) => {
@@ -275,7 +304,7 @@ export default function TeacherMasterDashboard() {
       await supabase.from('quiz_questions').insert([{
         quiz_id: qz.id,
         question_text: qText,
-        options: [opt0, opt1, opt2 || 'None', opt3 || 'None'],
+        options: [opt0, opt1, 'None', 'None'],
         correct_option: Number(correctOpt),
         marks: 100
       }]);
@@ -295,7 +324,7 @@ export default function TeacherMasterDashboard() {
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans selection:bg-purple-500 selection:text-white">
-      {/* Top Navbar */}
+      {/* Top Header */}
       <header className="border-b border-slate-800/80 px-6 py-4 bg-[#0c1322] sticky top-0 z-30 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
           <Link href="/" className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
@@ -310,11 +339,11 @@ export default function TeacherMasterDashboard() {
           </div>
         </div>
 
-        {/* Center Main Navigation Buttons */}
+        {/* Center Main Nav */}
         <div className="flex items-center bg-[#070b14] p-1 rounded-2xl border border-slate-800">
           <button
             onClick={() => { setMainView('classes'); setSelectedCourse(null); }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
               mainView === 'classes' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -322,7 +351,7 @@ export default function TeacherMasterDashboard() {
           </button>
           <button
             onClick={() => setMainView('zoom_config')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
               mainView === 'zoom_config' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -345,7 +374,7 @@ export default function TeacherMasterDashboard() {
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
 
-        {/* ================= VIEW 1: ZOOM CONFIGURATION PAGE ================= */}
+        {/* ZOOM CONFIG VIEW */}
         {mainView === 'zoom_config' && (
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="bg-[#0c1322] border border-slate-800/80 p-8 rounded-3xl shadow-xl space-y-6">
@@ -356,7 +385,7 @@ export default function TeacherMasterDashboard() {
                 <div>
                   <h2 className="text-lg font-bold text-white">Zoom Account Credentials</h2>
                   <p className="text-xs text-slate-400 leading-relaxed mt-1">
-                    ඔබගේ Zoom App Marketplace ගිණුමෙන් ලබාගත් Server-to-Server OAuth Credentials මෙහි ඇතුළත් කර සුරකින්න. මෙහි එක්වරක් සුරකින ලද තොරතුරු මඟින් සියලුම පන්ති සඳහා ක්ෂණිකව Meetings ජනනය වේ.
+                    Zoom Server-to-Server OAuth හි Account ID, Client ID සහ Client Secret මෙහි Save කරන්න.
                   </p>
                 </div>
               </div>
@@ -364,7 +393,7 @@ export default function TeacherMasterDashboard() {
               {isZoomConfigured && (
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                  <span>ඔබගේ Zoom Account එක සාර්ථකව සම්බන්ධ වී ඇත. අවශ්‍ය නම් පහතින් යාවත්කාලීන කළ හැක.</span>
+                  <span>Zoom Account එක සාර්ථකව සම්බන්ධ වී ඇත!</span>
                 </div>
               )}
 
@@ -372,61 +401,43 @@ export default function TeacherMasterDashboard() {
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1.5">Zoom Account ID</label>
                   <input
-                    type="text"
-                    value={zoomAccountId}
-                    onChange={(e) => setZoomAccountId(e.target.value)}
-                    placeholder="e.g. kH9bXyZ..."
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-blue-500"
-                    required
+                    type="text" value={zoomAccountId} onChange={(e) => setZoomAccountId(e.target.value)}
+                    placeholder="kH9bXyZ..." className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
                   />
                 </div>
-
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1.5">Client ID</label>
                   <input
-                    type="text"
-                    value={zoomClientId}
-                    onChange={(e) => setZoomClientId(e.target.value)}
-                    placeholder="e.g. 7abcDefGhi..."
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-blue-500"
-                    required
+                    type="text" value={zoomClientId} onChange={(e) => setZoomClientId(e.target.value)}
+                    placeholder="7abcDefGhi..." className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
                   />
                 </div>
-
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1.5">Client Secret</label>
                   <input
-                    type="password"
-                    value={zoomClientSecret}
-                    onChange={(e) => setZoomClientSecret(e.target.value)}
-                    placeholder="••••••••••••••••••••••••"
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-blue-500"
-                    required
+                    type="password" value={zoomClientSecret} onChange={(e) => setZoomClientSecret(e.target.value)}
+                    placeholder="••••••••••••••••••••••••" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
                   />
                 </div>
-
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={isSavingZoom}
-                    className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 cursor-pointer disabled:opacity-50"
-                  >
-                    {isSavingZoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    <span>{isSavingZoom ? 'Saving Settings...' : 'Save Zoom Credentials'}</span>
-                  </button>
-                </div>
+                <button
+                  type="submit" disabled={isSavingZoom}
+                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                >
+                  {isSavingZoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  <span>Save Zoom Credentials</span>
+                </button>
               </form>
             </div>
           </div>
         )}
 
-        {/* ================= VIEW 2: CLASSES HUB ================= */}
+        {/* ALL CLASSES LIST */}
         {mainView === 'classes' && !selectedCourse && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-black">Your Classes</h2>
-                <p className="text-xs text-slate-400">Select a class to generate live Zoom meetings, enroll students, and manage lessons.</p>
+                <p className="text-xs text-slate-400">පන්තියක් තෝරා Zoom, සිසුන්, Recordings සහ Tutes කළමනාකරණය කරන්න.</p>
               </div>
               <button
                 onClick={() => setShowCreateModal(true)}
@@ -438,30 +449,28 @@ export default function TeacherMasterDashboard() {
 
             {loading ? (
               <div className="p-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading your courses...
+                <Loader2 className="w-4 h-4 animate-spin" /> පන්ති ලෝඩ් වෙමින් පවතී...
               </div>
             ) : courses.length === 0 ? (
               <div className="border border-dashed border-slate-800 rounded-3xl p-12 text-center text-slate-500 text-xs">
-                No classes created yet. Click "Create New Class" to begin.
+                තවම පන්ති සාදා නැත. "Create New Class" ඔබන්න.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {courses.map((c) => (
-                  <div key={c.id} className="bg-[#0c1322] border border-slate-800/80 rounded-3xl p-6 space-y-4 hover:border-purple-500/40 transition shadow-xl">
+                  <div key={c.id} className="bg-[#0c1322] border border-slate-800/80 rounded-3xl p-6 space-y-4 shadow-xl">
                     <div className="flex items-start justify-between">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20">
                         {c.grade} • {c.class_type}
                       </span>
                       <span className="text-xs font-mono font-bold text-emerald-400">Rs. {c.monthly_fee}/-</span>
                     </div>
-
                     <h3 className="text-base font-bold text-white line-clamp-1">{c.title}</h3>
-
                     <button
                       onClick={() => openCourseManager(c)}
                       className="w-full py-2.5 bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <Settings className="w-3.5 h-3.5" /> Manage Class & Live Zoom
+                      <Settings className="w-3.5 h-3.5" /> Manage Class Hub
                     </button>
                   </div>
                 ))}
@@ -470,9 +479,10 @@ export default function TeacherMasterDashboard() {
           </div>
         )}
 
-        {/* ================= VIEW 3: SINGLE CLASS MANAGEMENT HUB ================= */}
+        {/* SINGLE CLASS HUB */}
         {mainView === 'classes' && selectedCourse && (
           <div className="space-y-6">
+            {/* Header info */}
             <div className="bg-[#0c1322] p-6 rounded-3xl border border-slate-800/80 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <button onClick={() => setSelectedCourse(null)} className="text-xs text-purple-400 hover:underline mb-1 flex items-center gap-1 cursor-pointer">
@@ -483,125 +493,99 @@ export default function TeacherMasterDashboard() {
               </div>
 
               {activeMeeting && (
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold animate-pulse">
-                    <Radio className="w-3.5 h-3.5" /> Live Meeting Ready
-                  </span>
-                </div>
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold animate-pulse">
+                  <Radio className="w-3.5 h-3.5" /> Live Meeting Active
+                </span>
               )}
             </div>
 
-            {/* Navigation Tabs */}
+            {/* CLASS TABS */}
             <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('zoom')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
                   activeTab === 'zoom' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Video className="w-4 h-4" /> Live Zoom Class
               </button>
+
               <button
                 onClick={() => setActiveTab('students')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                  activeTab === 'students' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'students' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Users className="w-4 h-4" /> Students ({students.length})
+                <Users className="w-4 h-4" /> Student Management ({students.length})
               </button>
+
+              <button
+                onClick={() => setActiveTab('recordings')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'recordings' ? 'bg-red-600 text-white shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <PlaySquare className="w-4 h-4" /> Lesson Recordings ({recordings.length})
+              </button>
+
               <button
                 onClick={() => setActiveTab('content')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
                   activeTab === 'content' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <BookOpen className="w-4 h-4" /> Tutes & Lessons
+                <BookOpen className="w-4 h-4" /> Tutes & Notes
               </button>
+
               <button
                 onClick={() => setActiveTab('quizzes')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
                   activeTab === 'quizzes' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <HelpCircle className="w-4 h-4" /> Timed Quizzes
               </button>
-              <button
-                onClick={() => setActiveTab('slips')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                  activeTab === 'slips' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <CheckCircle2 className="w-4 h-4" /> Bank Slips ({slips.length})
-              </button>
             </div>
 
-            {/* TAB: ZOOM LIVE MEETING GENERATOR */}
+            {/* TAB 1: ZOOM */}
             {activeTab === 'zoom' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* 1. Zoom Create Form */}
                 <form onSubmit={handleCreateZoomMeeting} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                   <div className="flex items-center gap-2">
                     <Video className="w-5 h-5 text-blue-400" />
                     <h3 className="font-bold text-sm text-white">Create New Zoom Meeting</h3>
                   </div>
 
-                  {!isZoomConfigured && (
-                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-1.5">
-                        <AlertCircle className="w-4 h-4" /> ඔබගේ Zoom Account එක තවම Configure කර නැත.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setMainView('zoom_config')}
-                        className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-lg cursor-pointer"
-                      >
-                        Set Keys ➔
-                      </button>
-                    </div>
-                  )}
-
                   <div className="space-y-3 pt-2">
                     <div>
                       <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Class Topic</label>
                       <input
-                        type="text"
-                        value={meetingTopic}
-                        onChange={(e) => setMeetingTopic(e.target.value)}
-                        placeholder="e.g. Unit 05 Discussion"
-                        className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                        required
+                        type="text" value={meetingTopic} onChange={(e) => setMeetingTopic(e.target.value)}
+                        placeholder="e.g. Unit 05 Discussion" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                       />
                     </div>
-
                     <div>
                       <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Duration (Minutes)</label>
                       <input
-                        type="number"
-                        value={meetingDuration}
-                        onChange={(e) => setMeetingDuration(e.target.value)}
-                        placeholder="120"
-                        className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                        required
+                        type="number" value={meetingDuration} onChange={(e) => setMeetingDuration(e.target.value)}
+                        placeholder="120" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                       />
                     </div>
                   </div>
 
                   <button
-                    type="submit"
-                    disabled={isCreatingMeeting}
+                    type="submit" disabled={isCreatingMeeting}
                     className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/30 disabled:opacity-50"
                   >
                     {isCreatingMeeting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
-                    <span>{isCreatingMeeting ? 'Creating Zoom Class...' : 'Generate Zoom Meeting'}</span>
+                    <span>{isCreatingMeeting ? 'Meeting එක සෑදෙමින් පවතී...' : 'Generate Zoom Meeting'}</span>
                   </button>
                 </form>
 
-                {/* 2. Active Meeting Dashboard & Links */}
                 <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl flex flex-col justify-between">
                   <div>
                     <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                      <Radio className="w-4 h-4 text-emerald-400" /> Active Zoom Class Details
+                      <Radio className="w-4 h-4 text-emerald-400" /> Active Zoom Details
                     </h3>
 
                     {activeMeeting ? (
@@ -611,21 +595,17 @@ export default function TeacherMasterDashboard() {
                           <h4 className="text-sm font-bold text-white">{activeMeeting.topic}</h4>
                           <div className="flex gap-4 pt-1 font-mono text-xs text-slate-300">
                             <span>ID: <strong className="text-white">{activeMeeting.meeting_id || 'N/A'}</strong></span>
-                            <span>Passcode: <strong className="text-emerald-400">{activeMeeting.password || 'None'}</strong></span>
+                            <span>Pass: <strong className="text-emerald-400">{activeMeeting.password || 'None'}</strong></span>
                           </div>
                         </div>
 
-                        {/* Action Buttons */}
                         <div className="space-y-2">
                           <a
-                            href={activeMeeting.start_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-purple-600/30"
+                            href={activeMeeting.start_url} target="_blank" rel="noreferrer"
+                            className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
                           >
                             <ExternalLink className="w-4 h-4" /> Start Class as Host (ගුරුතුමාට)
                           </a>
-
                           <button
                             onClick={handleCopyWhatsAppText}
                             className="w-full py-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
@@ -635,71 +615,216 @@ export default function TeacherMasterDashboard() {
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-12 text-center text-slate-500 text-xs space-y-2">
-                        <Video className="w-8 h-8 mx-auto text-slate-600" />
+                      <div className="mt-12 text-center text-slate-500 text-xs">
                         <p>මෙම පන්තිය සඳහා තවම Zoom Meeting එකක් සාදා නැත.</p>
                       </div>
                     )}
                   </div>
-
-                  <p className="text-[10px] text-slate-500 text-center">
-                    * සාදන Zoom Link එක මෙම පන්තියේ Enrolled සියලු සිසුන්ගේ Student Portal එකේ ස්වයංක්‍රීයව දිස්වේ.
-                  </p>
                 </div>
-
               </div>
             )}
 
-            {/* TAB: STUDENTS */}
+            {/* TAB 2: COMPLETE STUDENT MANAGEMENT (Unlock Device + Payment Status + Bank Slips) */}
             {activeTab === 'students' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Enroll form */}
+                  <form onSubmit={handleAddStudent} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
+                    <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-purple-400" /> Enroll New Student
+                    </h3>
+                    <input
+                      type="text" placeholder="Full Name" value={studentName} onChange={(e) => setStudentName(e.target.value)}
+                      className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                    />
+                    <input
+                      type="text" placeholder="WhatsApp Number (077...)" value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)}
+                      className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+                    />
+                    <input
+                      type="text" placeholder="Index No (Optional)" value={studentIndex} onChange={(e) => setStudentIndex(e.target.value)}
+                      className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+                    />
+                    <button type="submit" className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
+                      Enroll to this Class
+                    </button>
+                  </form>
+
+                  {/* Enrolled Students with Device Unlock */}
+                  <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Device Security
+                      </h3>
+                      <span className="text-xs text-slate-400">{students.length} Total</span>
+                    </div>
+
+                    {students.length === 0 ? (
+                      <p className="text-xs text-slate-500 py-8 text-center">තවම සිසුන් ලියාපදිංචි කර නැත.</p>
+                    ) : (
+                      <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                        {students.map((st) => (
+                          <div key={st.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="space-y-1">
+                              <h4 className="font-bold text-xs text-white flex items-center gap-2">
+                                {st.full_name}
+                                <span className="text-[10px] text-purple-400 font-mono bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                                  {st.index_number}
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-slate-400 font-mono">📱 WhatsApp: {st.whatsapp_number}</p>
+                            </div>
+
+                            {/* Device Unlock Button */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleUnlockDevice(st.id)}
+                                title="Device reset කර ශිෂ්‍යයාට නව Device එකකින් ලොග් වීමට අවසර දෙන්න"
+                                className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                              >
+                                <Unlock className="w-3.5 h-3.5" />
+                                <span>Unlock Device</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bank Slips & Payment Approvals Section */}
+                <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-emerald-400" /> Student Bank Slips & Payment Status
+                      </h3>
+                      <p className="text-xs text-slate-400">සිසුන් එවූ බැංකු රිසිට්පත් පරීක්ෂා කර Approve හෝ Reject කරන්න.</p>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-emerald-400">{slips.length} Slips Submitted</span>
+                  </div>
+
+                  {slips.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-6 text-center">තවම රිසිට්පත් කිසිවක් ලැබී නැත.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {slips.map((slp) => (
+                        <div key={slp.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h4 className="font-bold text-xs text-white">{slp.students?.full_name}</h4>
+                              <span className="text-[10px] text-slate-400 font-mono">ID: {slp.students?.index_number}</span>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                              slp.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            }`}>
+                              {slp.status}
+                            </span>
+                          </div>
+
+                          <div className="pt-1">
+                            <a
+                              href={slp.slip_url} target="_blank" rel="noreferrer"
+                              className="text-xs text-blue-400 hover:underline flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800"
+                            >
+                              <FileText className="w-4 h-4" />
+                              <span className="truncate">View Uploaded Slip ➔</span>
+                            </a>
+                          </div>
+
+                          {slp.status !== 'Approved' && (
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                onClick={() => handleUpdateSlipStatus(slp.id, 'Approved')}
+                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleUpdateSlipStatus(slp.id, 'Rejected')}
+                                className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: LESSON RECORDINGS (Dedicated Section) */}
+            {activeTab === 'recordings' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <form onSubmit={handleAddStudent} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
-                  <h3 className="font-bold text-sm text-white">Enroll New Student</h3>
-                  <input
-                    type="text"
-                    placeholder="Full Name"
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="WhatsApp Phone"
-                    value={studentPhone}
-                    onChange={(e) => setStudentPhone(e.target.value)}
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Index No (ST-001)"
-                    value={studentIndex}
-                    onChange={(e) => setStudentIndex(e.target.value)}
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
-                  />
-                  <button type="submit" className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
-                    Register to this Class
+                <form onSubmit={handleAddRecording} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
+                  <div className="flex items-center gap-2">
+                    <PlaySquare className="w-5 h-5 text-red-400" />
+                    <h3 className="font-bold text-sm text-white">Add Past Lesson Recording</h3>
+                  </div>
+                  <p className="text-xs text-slate-400">පන්ති පාඩමේ YouTube Video Link එක හෝ Video ID එක මෙහි ඇතුළත් කරන්න.</p>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Lesson Title</label>
+                      <input
+                        type="text" placeholder="e.g. Lesson 01 - Theory Revision" value={recordingTitle}
+                        onChange={(e) => setRecordingTitle(e.target.value)} className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">YouTube Video ID / URL</label>
+                      <input
+                        type="text" placeholder="e.g. dQw4w9WgXcQ" value={recordingId}
+                        onChange={(e) => setRecordingId(e.target.value)} className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+                  </div>
+
+                  <button type="submit" className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-red-600/30">
+                    Add Recording
                   </button>
                 </form>
 
                 <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
-                  <h3 className="font-bold text-sm text-white">Enrolled Students</h3>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {students.map((st) => (
-                      <div key={st.id} className="p-3 bg-[#131c31] border border-slate-700/50 rounded-2xl flex items-center justify-between">
-                        <div>
-                          <h4 className="font-bold text-xs text-white">{st.full_name}</h4>
-                          <span className="text-[11px] text-purple-400 font-mono">ID: {st.index_number} • WhatsApp: {st.whatsapp_number}</span>
+                  <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                    <PlaySquare className="w-4 h-4 text-red-400" /> Uploaded Recordings ({recordings.length})
+                  </h3>
+
+                  {recordings.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-8 text-center">තවම කිසිදු Recording එකක් දමා නැත.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {recordings.map((rec) => (
+                        <div key={rec.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl space-y-3">
+                          <h4 className="font-bold text-xs text-white line-clamp-1">{rec.title}</h4>
+                          <div className="text-[11px] text-slate-400 font-mono">ID: {rec.youtube_video_id}</div>
+                          <div className="flex items-center justify-between pt-1">
+                            <a
+                              href={`https://youtube.com/watch?v=${rec.youtube_video_id}`} target="_blank" rel="noreferrer"
+                              className="text-xs text-red-400 hover:underline flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" /> Watch on YouTube
+                            </a>
+                            <button
+                              onClick={() => handleDeleteRecording(rec.id)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 transition cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-1 rounded-md border border-emerald-500/20">Active</span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* TAB: CONTENT */}
+            {/* TAB 4: TUTES */}
             {activeTab === 'content' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <form onSubmit={handleAddMaterial} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
@@ -709,7 +834,7 @@ export default function TeacherMasterDashboard() {
                     className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                   />
                   <input
-                    type="url" placeholder="PDF Document URL" value={materialUrl} onChange={(e) => setMaterialUrl(e.target.value)}
+                    type="url" placeholder="PDF File URL (Google Drive etc.)" value={materialUrl} onChange={(e) => setMaterialUrl(e.target.value)}
                     className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                   />
                   <button type="submit" className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
@@ -717,24 +842,19 @@ export default function TeacherMasterDashboard() {
                   </button>
                 </form>
 
-                <form onSubmit={handleAddRecording} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
-                  <h3 className="font-bold text-sm text-white">Add Past Lesson Recording</h3>
-                  <input
-                    type="text" placeholder="Lesson Title" value={recordingTitle} onChange={(e) => setRecordingTitle(e.target.value)}
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
-                  />
-                  <input
-                    type="text" placeholder="YouTube Video ID" value={recordingId} onChange={(e) => setRecordingId(e.target.value)}
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
-                  />
-                  <button type="submit" className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
-                    Add Video Recording
-                  </button>
-                </form>
+                <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-3 shadow-xl">
+                  <h3 className="font-bold text-sm text-white">Active Tutes ({materials.length})</h3>
+                  {materials.map(m => (
+                    <div key={m.id} className="p-3 bg-[#131c31] border border-slate-700/50 rounded-xl flex items-center justify-between">
+                      <span className="text-xs text-white font-medium truncate">{m.title}</span>
+                      <a href={m.file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">Download ➔</a>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* TAB: QUIZZES */}
+            {/* TAB 5: QUIZZES */}
             {activeTab === 'quizzes' && (
               <form onSubmit={handleCreateQuiz} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                 <h3 className="font-bold text-sm text-white">Create Anti-Cheat Timed Quiz</h3>
@@ -754,33 +874,6 @@ export default function TeacherMasterDashboard() {
                   Save Quiz & Publish
                 </button>
               </form>
-            )}
-
-            {/* TAB: BANK SLIPS */}
-            {activeTab === 'slips' && (
-              <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
-                <h3 className="font-bold text-sm text-white">Student Payment Slips</h3>
-                {slips.length === 0 ? (
-                  <p className="text-xs text-slate-500">No payment slips submitted yet.</p>
-                ) : (
-                  slips.map((slp) => (
-                    <div key={slp.id} className="p-4 bg-[#131c31] border border-slate-700/50 rounded-2xl flex items-center justify-between">
-                      <div>
-                        <h4 className="font-bold text-xs text-white">{slp.students?.full_name} ({slp.students?.index_number})</h4>
-                        <a href={slp.slip_url} target="_blank" rel="noreferrer" className="text-[11px] text-blue-400 hover:underline">View Bank Slip ➔</a>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400">{slp.status}</span>
-                        {slp.status !== 'Approved' && (
-                          <button onClick={() => handleUpdateSlipStatus(slp.id, 'Approved')} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer">
-                            Approve
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
             )}
 
           </div>
@@ -809,10 +902,10 @@ export default function TeacherMasterDashboard() {
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
               />
               <div className="flex items-center justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold">
+                <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer">
                   Cancel
                 </button>
-                <button type="submit" disabled={isSubmittingCourse} className="px-5 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold">
+                <button type="submit" disabled={isSubmittingCourse} className="px-5 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold cursor-pointer">
                   Create Class
                 </button>
               </div>
