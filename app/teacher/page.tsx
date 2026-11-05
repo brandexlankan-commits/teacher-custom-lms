@@ -9,7 +9,7 @@ import {
   GraduationCap, ArrowLeft, Loader2, KeyRound, 
   Radio, Share2, Layers, AlertCircle, Smartphone, 
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
-  Copy, Key
+  Copy, Key, BarChart3, Award, Calendar, X
 } from 'lucide-react';
 
 export default function TeacherMasterDashboard() {
@@ -35,6 +35,12 @@ export default function TeacherMasterDashboard() {
   // Selected Course Management State
   const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'zoom' | 'students' | 'recordings' | 'content' | 'quizzes'>('zoom');
+
+  // Student Performance Report Modal States
+  const [selectedStudentForReport, setSelectedStudentForReport] = useState<any | null>(null);
+  const [studentQuizResults, setStudentQuizResults] = useState<any[]>([]);
+  const [studentAttendanceLogs, setStudentAttendanceLogs] = useState<any[]>([]);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   // Zoom Meeting Creator inside Course Hub
   const [meetingTopic, setMeetingTopic] = useState('');
@@ -168,6 +174,36 @@ export default function TeacherMasterDashboard() {
     if (slp) setSlips(slp);
   };
 
+  // Student Performance Report Viewer Logic
+  const handleOpenStudentReport = async (student: any) => {
+    setSelectedStudentForReport(student);
+    setLoadingReport(true);
+
+    try {
+      // 1. Fetch Quiz Submissions with Quiz Details
+      const { data: qSubs } = await supabase
+        .from('quiz_submissions')
+        .select('*, quizzes(title, duration_minutes, total_marks)')
+        .eq('student_id', student.id)
+        .order('submitted_at', { ascending: false });
+
+      if (qSubs) setStudentQuizResults(qSubs);
+
+      // 2. Fetch Attendance Logs for this student
+      const { data: attLogs } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('student_id', student.id)
+        .order('marked_at', { ascending: false });
+
+      if (attLogs) setStudentAttendanceLogs(attLogs);
+    } catch (err) {
+      console.error('Report fetch error:', err);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
   const handleCreateZoomMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourse) return;
@@ -221,7 +257,6 @@ export default function TeacherMasterDashboard() {
     e.preventDefault();
     if (!studentName || !selectedCourse) return;
 
-    // Auto-generate credentials if not given
     const autoIndex = studentIndex.trim() || `ST-${Math.floor(1000 + Math.random() * 9000)}`;
     const autoPassword = studentCustomPass.trim() || Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -241,7 +276,6 @@ export default function TeacherMasterDashboard() {
       setStudentCustomPass('');
       await loadCourseDetails(selectedCourse.id);
 
-      // Copy credentials to clipboard immediately
       const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
         `ඔබගේ ශිෂ්‍ය ගිණුමේ විස්තර (Login Details):\n` +
         `🔗 Student Portal: ${window.location.origin}/student\n` +
@@ -250,13 +284,12 @@ export default function TeacherMasterDashboard() {
         `⚠️ කරුණාකර මෙම තොරතුරු ඔබගේ දුරකථනයෙන් හෝ පරිගණකයෙන් ඇතුළත් කර Login වන්න. (පළමු වර Log වන Device එකට පමණක් ඔබගේ ගිණුම සීමා වේ)`;
 
       navigator.clipboard.writeText(credText);
-      alert(`ශිෂ්‍යයා සාර්ථකව Enroll විය!\n\nUsername: ${newStu.index_number}\nPassword: ${newStu.password || autoPassword}\n\n(WhatsApp Login Message එක දැනටමත් Copy වී ඇත)`);
+      alert(`ශිෂ්‍යයා සාර්ථකව Enroll විය!\n\nUsername: ${newStu.index_number}\nPassword: ${newStu.password || autoPassword}\n\n(WhatsApp Login Message එක දැනටමත් Copy කරගන්නා ලදී)`);
     } else {
       alert('Enrollment Error: ' + (err?.message || 'දෝෂයක් මතු විය'));
     }
   };
 
-  // 1-Click WhatsApp Login Share for individual students
   const handleCopyStudentLogin = (st: any) => {
     if (!selectedCourse) return;
     const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
@@ -270,7 +303,6 @@ export default function TeacherMasterDashboard() {
     alert(`${st.full_name} සිසුවාගේ Login Details (WhatsApp Message) Copy කරගන්නා ලදී!`);
   };
 
-  // Student Action: Device Unlock
   const handleUnlockDevice = async (studentId: string) => {
     const { error } = await supabase.from('students').update({ device_id: null }).eq('id', studentId);
     if (!error) {
@@ -281,7 +313,6 @@ export default function TeacherMasterDashboard() {
     }
   };
 
-  // Recording Actions
   const handleAddRecording = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!recordingTitle || !recordingId || !selectedCourse) return;
@@ -313,7 +344,6 @@ export default function TeacherMasterDashboard() {
     loadCourseDetails(selectedCourse.id);
   };
 
-  // Materials & Quizzes
   const handleAddMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!materialTitle || !materialUrl || !selectedCourse) return;
@@ -658,7 +688,7 @@ export default function TeacherMasterDashboard() {
               </div>
             )}
 
-            {/* TAB 2: STUDENT MANAGEMENT WITH CREDENTIALS & 1-CLICK SHARE */}
+            {/* TAB 2: STUDENT MANAGEMENT WITH REPORTS, CREDENTIALS & 1-CLICK SHARE */}
             {activeTab === 'students' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -668,7 +698,7 @@ export default function TeacherMasterDashboard() {
                       <Plus className="w-4 h-4 text-purple-400" /> Enroll New Student
                     </h3>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      නම සහ WhatsApp අංකය ලබා දෙන්න. Username සහ Password පද්ධතියෙන්ම Auto-Generate වේ.
+                      නම සහ WhatsApp අංකය ලබා දෙන්න. Username සහ Password Auto-Generate වේ.
                     </p>
 
                     <div>
@@ -708,11 +738,11 @@ export default function TeacherMasterDashboard() {
                     </button>
                   </form>
 
-                  {/* Enrolled Students List with Login Credentials & Actions */}
+                  {/* Enrolled Students List with Performance Report Button */}
                   <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                     <div className="flex items-center justify-between">
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Credentials
+                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Reports
                       </h3>
                       <span className="text-xs text-slate-400">{students.length} Total Enrolled</span>
                     </div>
@@ -720,7 +750,7 @@ export default function TeacherMasterDashboard() {
                     {students.length === 0 ? (
                       <p className="text-xs text-slate-500 py-8 text-center">තවම කිසිදු ශිෂ්‍යයෙක් ලියාපදිංචි කර නැත.</p>
                     ) : (
-                      <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+                      <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
                         {students.map((st) => (
                           <div key={st.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="space-y-1.5">
@@ -741,15 +771,25 @@ export default function TeacherMasterDashboard() {
                               </div>
                             </div>
 
-                            {/* Actions: Copy WhatsApp Login + Device Unlock */}
-                            <div className="flex items-center gap-2">
+                            {/* Actions: View Report + Copy Login + Device Unlock */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* 1. VIEW STUDENT REPORT BUTTON */}
+                              <button
+                                onClick={() => handleOpenStudentReport(st)}
+                                title="විභාග ලකුණු සහ පැමිණීමේ සම්පූර්ණ වාර්තාව බලන්න"
+                                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-blue-600/30"
+                              >
+                                <BarChart3 className="w-3.5 h-3.5" />
+                                <span>Report</span>
+                              </button>
+
                               <button
                                 onClick={() => handleCopyStudentLogin(st)}
                                 title="Login Details WhatsApp Message එක Copy කරගන්න"
                                 className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
                               >
                                 <Copy className="w-3.5 h-3.5" />
-                                <span>Copy Login</span>
+                                <span>Login</span>
                               </button>
 
                               <button
@@ -758,7 +798,7 @@ export default function TeacherMasterDashboard() {
                                 className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
                               >
                                 <Unlock className="w-3.5 h-3.5" />
-                                <span>Unlock Device</span>
+                                <span>Unlock</span>
                               </button>
                             </div>
                           </div>
@@ -954,6 +994,129 @@ export default function TeacherMasterDashboard() {
           </div>
         )}
       </main>
+
+      {/* ================= MODAL: STUDENT PERFORMANCE & EXAM REPORT ================= */}
+      {selectedStudentForReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 shadow-2xl space-y-6">
+            
+            {/* Header with Student Summary */}
+            <div className="flex items-start justify-between border-b border-slate-800 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold">
+                  <BarChart3 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    {selectedStudentForReport.full_name}
+                    <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                      ID: {selectedStudentForReport.index_number}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    📱 {selectedStudentForReport.whatsapp_number} • {selectedCourse?.title}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedStudentForReport(null)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {loadingReport ? (
+              <div className="py-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> ප්‍රතිඵල වාර්තාව සූදානම් වෙමින් පවතී...
+              </div>
+            ) : (
+              <div className="space-y-6">
+                
+                {/* 1. Quick Stats Cards */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">මුහුණ දුන් විභාග</span>
+                    <h4 className="text-xl font-black text-white mt-1">{studentQuizResults.length}</h4>
+                  </div>
+                  <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">ලබාගත් සාමාන්‍යය</span>
+                    <h4 className="text-xl font-black text-emerald-400 mt-1">
+                      {studentQuizResults.length > 0 
+                        ? `${Math.round(studentQuizResults.reduce((a, b) => a + Number(b.score || 0), 0) / studentQuizResults.length)}%` 
+                        : '0%'}
+                    </h4>
+                  </div>
+                  <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">සජීවී පැමිණීම (Live)</span>
+                    <h4 className="text-xl font-black text-blue-400 mt-1">{studentAttendanceLogs.length} දින</h4>
+                  </div>
+                </div>
+
+                {/* 2. Detailed Quiz Results Table */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-400" /> විභාග ලකුණු සහ ප්‍රතිඵල (Quiz Submissions)
+                  </h4>
+
+                  {studentQuizResults.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-[#070b14] border border-slate-800 text-center text-slate-500 text-xs">
+                      මෙම ශිෂ්‍යයා තවමත් කිසිදු විභාගයකට (Quiz) මුහුණ දී නැත.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {studentQuizResults.map((res) => (
+                        <div key={res.id} className="p-3.5 bg-[#070b14] border border-slate-800/80 rounded-2xl flex items-center justify-between">
+                          <div>
+                            <h5 className="font-bold text-xs text-white">{res.quizzes?.title || 'Online Exam'}</h5>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              දිනය: {new Date(res.submitted_at).toLocaleDateString()} • වේලාව: {new Date(res.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                              ලකුණු: {res.score} / {res.quizzes?.total_marks || 100}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Attendance Log */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-400" /> Zoom පන්ති පැමිණීමේ ඉතිහාසය (Attendance Logs)
+                  </h4>
+
+                  {studentAttendanceLogs.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 text-center text-slate-500 text-xs">
+                      පැමිණීමේ සටහන් කිසිවක් නැත.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {studentAttendanceLogs.map((att) => (
+                        <div key={att.id} className="p-3 bg-[#070b14] border border-slate-800/80 rounded-xl flex items-center justify-between text-xs">
+                          <span className="text-slate-300 font-mono">
+                            {new Date(att.marked_at).toLocaleDateString()} {new Date(att.marked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                            Present ({att.duration_minutes}m)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* CREATE CLASS MODAL */}
       {showCreateModal && (
