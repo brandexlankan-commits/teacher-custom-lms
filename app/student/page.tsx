@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   GraduationCap, Video, BookOpen, Clock, 
   HelpCircle, CheckCircle2, XCircle, Award, 
   Download, ShieldCheck, PlaySquare, 
-  Lock, X, CreditCard, AlertCircle, LogOut, KeyRound, Smartphone, Upload, Loader2
+  Lock, X, CreditCard, AlertCircle, LogOut, KeyRound, Smartphone, Upload, Loader2,
+  ShieldAlert, ArrowRight, MessageSquare
 } from 'lucide-react';
 
 // Deterministic Hardware + Browser Fingerprint Generator
@@ -24,7 +25,6 @@ function generateHardwareFingerprint(): string {
       navigator.platform || ''
     ];
 
-    // Canvas Graphics Signature for Hardware Differentiation
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (ctx) {
@@ -72,7 +72,7 @@ export default function StudentPortal() {
   const [loading, setLoading] = useState(true);
 
   // Login Form States
-  const [loginIdentifier, setLoginIdentifier] = useState(''); // Index No or Phone
+  const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -81,6 +81,7 @@ export default function StudentPortal() {
   const [activeMeeting, setActiveMeeting] = useState<any | null>(null);
   const [materials, setMaterials] = useState<any[]>([]);
   const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [mySubmissionsMap, setMySubmissionsMap] = useState<Record<string, any>>({});
   const [recordings, setRecordings] = useState<any[]>([]);
   const [activeQuiz, setActiveQuiz] = useState<any | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -92,17 +93,23 @@ export default function StudentPortal() {
   const [slipStatus, setSlipStatus] = useState<string | null>(null);
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
 
-  // Quiz States
+  // Exam & Quiz Execution States
   const [timeLeft, setTimeLeft] = useState<number>(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [currentQuestionIdx, setCurrentQuestionIdx] = useState<number>(0);
+  const [questionTimeLeft, setQuestionTimeLeft] = useState<number>(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, any>>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+
+  // Anti-Cheat States
+  const [tabStrikes, setTabStrikes] = useState<number>(0);
+  const [cheatAlertMsg, setCheatAlertMsg] = useState<string | null>(null);
+  const isSubmittingRef = useRef(false);
 
   // Access Control Flag (Unlocked only when teacher approves bank slip)
   const isUnlocked = slipStatus === 'Approved';
 
   useEffect(() => {
-    // Check local session
     const savedStudent = localStorage.getItem('lms_student_session');
     if (savedStudent) {
       try {
@@ -117,7 +124,6 @@ export default function StudentPortal() {
     }
   }, []);
 
-  // Student Login Handler via Secure Server API + Hardware 1-Device Lock
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
@@ -143,7 +149,6 @@ export default function StudentPortal() {
         return;
       }
 
-      // Save Session
       localStorage.setItem('lms_student_session', JSON.stringify(data.student));
       await verifyAndLoadStudent(data.student.id);
     } catch (err: any) {
@@ -168,10 +173,8 @@ export default function StudentPortal() {
       return;
     }
 
-    // Re-verify 1-Device Lock on session restore
     const currentDeviceId = generateHardwareFingerprint();
     if (!stu.device_id) {
-      // Teacher unlocked the device; bind to current verified device
       await supabase.from('students').update({ device_id: currentDeviceId }).eq('id', stu.id);
     } else if (stu.device_id !== currentDeviceId) {
       handleLogout();
@@ -187,7 +190,6 @@ export default function StudentPortal() {
       phone: stu.whatsapp_number
     });
 
-    // Find Enrolled Class
     const { data: enrollments } = await supabase
       .from('enrollments')
       .select('course_id, courses(*)')
@@ -199,7 +201,6 @@ export default function StudentPortal() {
       const course = enrollments.courses as any;
       setCurrentCourse(course);
 
-      // Active Zoom Meeting
       const { data: mtg } = await supabase
         .from('zoom_meetings')
         .select('*')
@@ -209,16 +210,24 @@ export default function StudentPortal() {
         .maybeSingle();
       setActiveMeeting(mtg);
 
-      // Materials, Recordings, Quizzes, Slips
       const { data: mat } = await supabase.from('materials').select('*').eq('course_id', course.id);
-      const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', course.id);
+      const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', course.id).order('created_at', { ascending: false });
       const { data: rec } = await supabase.from('recordings').select('*').eq('course_id', course.id);
       const { data: slp } = await supabase.from('slips').select('*').eq('student_id', stu.id).eq('course_id', course.id).order('submitted_at', { ascending: false }).limit(1);
+      const { data: subs } = await supabase.from('quiz_submissions').select('*').eq('student_id', stu.id).order('submitted_at', { ascending: false });
 
       if (mat) setMaterials(mat);
       if (qz) setQuizzes(qz);
       if (rec) setRecordings(rec);
       if (slp && slp.length > 0) setSlipStatus(slp[0].status);
+
+      if (subs) {
+        const subMap: Record<string, any> = {};
+        subs.forEach((s: any) => {
+          if (!subMap[s.quiz_id]) subMap[s.quiz_id] = s;
+        });
+        setMySubmissionsMap(subMap);
+      }
     }
 
     setLoading(false);
@@ -236,7 +245,6 @@ export default function StudentPortal() {
       return;
     }
 
-    // Mark Attendance
     if (studentInfo && currentCourse) {
       await supabase.from('attendance').insert([{
         student_id: studentInfo.id,
@@ -300,49 +308,179 @@ export default function StudentPortal() {
       return;
     }
 
-    const { data: qData } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quiz.id);
+    if (quiz.assessment_type === 'Online Exam' && mySubmissionsMap[quiz.id]) {
+      alert('You have already completed this Online Exam. Only one attempt is permitted.');
+      return;
+    }
+
+    const { data: qData } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quiz.id).order('id', { ascending: true });
     if (qData && qData.length > 0) {
-      setQuestions(qData);
+      let preparedQuestions = [...qData];
+      // Shuffle question order for Online Exams to prevent side-by-side cheating
+      if (quiz.assessment_type === 'Online Exam') {
+        preparedQuestions = preparedQuestions.sort(() => Math.random() - 0.5);
+      }
+
+      isSubmittingRef.current = false;
+      setQuestions(preparedQuestions);
       setActiveQuiz(quiz);
-      setTimeLeft(quiz.duration_minutes * 60);
+      setCurrentQuestionIdx(0);
+      setTimeLeft((quiz.duration_minutes || 20) * 60);
+      setQuestionTimeLeft(quiz.per_question_seconds || 60);
       setSelectedAnswers({});
       setQuizSubmitted(false);
       setScore(0);
+      setTabStrikes(0);
+      setCheatAlertMsg(null);
+
+      // Request fullscreen for Online Exams if supported
+      if (quiz.assessment_type === 'Online Exam' && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
     } else {
-      alert('Questions have not been added to this quiz yet.');
+      alert('Questions have not been added to this exam/quiz yet.');
     }
   };
 
+  // Timer Effect: Supports both Whole Exam Timer & Per-Question Auto-Advancing Timer
   useEffect(() => {
-    if (!activeQuiz || quizSubmitted || timeLeft <= 0) return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleSubmitQuiz();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [activeQuiz, quizSubmitted, timeLeft]);
+    if (!activeQuiz || quizSubmitted) return;
 
-  const handleSubmitQuiz = async () => {
+    const isPerQuestion = activeQuiz.timer_mode === 'per_question';
+
+    const timer = setInterval(() => {
+      if (isPerQuestion) {
+        setQuestionTimeLeft((prev) => {
+          if (prev <= 1) {
+            // Auto-advance to next question or auto-submit on last question
+            setCurrentQuestionIdx((currIdx) => {
+              if (currIdx + 1 < questions.length) {
+                setQuestionTimeLeft(activeQuiz.per_question_seconds || 60);
+                return currIdx + 1;
+              } else {
+                clearInterval(timer);
+                handleSubmitQuiz(tabStrikes);
+                return currIdx;
+              }
+            });
+            return activeQuiz.per_question_seconds || 60;
+          }
+          return prev - 1;
+        });
+      } else {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleSubmitQuiz(tabStrikes);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeQuiz, quizSubmitted, questions.length, tabStrikes]);
+
+  // Anti-Cheat Tab-Switch & Copy/Paste Guard during active Exam/Quiz
+  useEffect(() => {
+    if (!activeQuiz || quizSubmitted) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setTabStrikes((prev) => {
+          const nextStrike = prev + 1;
+          if (nextStrike >= 3) {
+            setCheatAlertMsg('⚠️ Security Violation (3/3): Exam auto-submitted due to repeated tab switching.');
+            handleSubmitQuiz(nextStrike);
+          } else {
+            setCheatAlertMsg(
+              `⚠️ Anti-Cheat Warning (${nextStrike}/3): Do not switch tabs or leave the exam window! On 3 warnings your exam will auto-submit.`
+            );
+          }
+          return nextStrike;
+        });
+      }
+    };
+
+    const preventCheatingAction = (e: Event) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('copy', preventCheatingAction);
+    document.addEventListener('cut', preventCheatingAction);
+    document.addEventListener('paste', preventCheatingAction);
+    document.addEventListener('contextmenu', preventCheatingAction);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('copy', preventCheatingAction);
+      document.removeEventListener('cut', preventCheatingAction);
+      document.removeEventListener('paste', preventCheatingAction);
+      document.removeEventListener('contextmenu', preventCheatingAction);
+    };
+  }, [activeQuiz, quizSubmitted]);
+
+  const handleNextPerQuestion = () => {
+    if (!activeQuiz) return;
+    if (currentQuestionIdx + 1 < questions.length) {
+      setCurrentQuestionIdx((prev) => prev + 1);
+      setQuestionTimeLeft(activeQuiz.per_question_seconds || 60);
+    } else {
+      handleSubmitQuiz(tabStrikes);
+    }
+  };
+
+  const handleSubmitQuiz = async (finalTabStrikes = tabStrikes) => {
+    if (isSubmittingRef.current || quizSubmitted) return;
+    isSubmittingRef.current = true;
+
     let earnedMarks = 0;
-    questions.forEach((q, idx) => {
-      if (selectedAnswers[idx] === q.correct_option) earnedMarks += q.marks || 10;
+    questions.forEach((q) => {
+      const ans = selectedAnswers[q.id];
+      if (q.question_type === 'free_answer') {
+        if (
+          q.sample_answer &&
+          typeof ans === 'string' &&
+          ans.trim().toLowerCase() === q.sample_answer.trim().toLowerCase()
+        ) {
+          earnedMarks += q.marks || 10;
+        }
+      } else {
+        if (ans === q.correct_option) {
+          earnedMarks += q.marks || 10;
+        }
+      }
     });
+
     setScore(earnedMarks);
     setQuizSubmitted(true);
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+
     if (activeQuiz && studentInfo) {
-      await supabase.from('quiz_submissions').insert([{
-        quiz_id: activeQuiz.id,
-        student_id: studentInfo.id,
-        score: earnedMarks,
-        total_questions: questions.length,
-        answers: selectedAnswers
-      }]);
+      const { data: insertedSub } = await supabase
+        .from('quiz_submissions')
+        .insert([{
+          quiz_id: activeQuiz.id,
+          student_id: studentInfo.id,
+          score: earnedMarks,
+          total_questions: questions.length,
+          answers: selectedAnswers,
+          tab_switches: finalTabStrikes
+        }])
+        .select()
+        .single();
+
+      if (insertedSub) {
+        setMySubmissionsMap((prev) => ({
+          ...prev,
+          [activeQuiz.id]: insertedSub
+        }));
+      }
     }
   };
 
@@ -586,7 +724,7 @@ export default function StudentPortal() {
               </div>
             </div>
 
-            {/* RECORDINGS, TUTES, QUIZZES */}
+            {/* RECORDINGS, TUTES, EXAMS & QUIZZES */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Recordings */}
               <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
@@ -648,38 +786,80 @@ export default function StudentPortal() {
                 )}
               </div>
 
-              {/* Quizzes */}
+              {/* Exams & Quizzes */}
               <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4 text-amber-400" /> Quizzes & Papers
+                  <HelpCircle className="w-4 h-4 text-amber-400" /> Exams & Quizzes ({quizzes.length})
                 </h3>
                 {quizzes.length === 0 ? (
-                  <p className="text-xs text-slate-500">No quizzes available.</p>
+                  <p className="text-xs text-slate-500">No exams or quizzes available.</p>
                 ) : (
-                  <div className="space-y-3 max-h-72 overflow-y-auto">
-                    {quizzes.map((q) => (
-                      <div key={q.id} className="p-3.5 rounded-2xl bg-[#131c31] border border-slate-700/50 space-y-2">
-                        <h4 className="font-bold text-xs text-white line-clamp-1">{q.title}</h4>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-slate-400 font-mono">{q.duration_minutes} Mins</span>
-                          {isUnlocked ? (
-                            <button
-                              onClick={() => handleStartQuiz(q)}
-                              className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-900 text-[11px] font-bold transition cursor-pointer"
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {quizzes.map((q) => {
+                      const prevSub = mySubmissionsMap[q.id];
+                      const isExam = q.assessment_type === 'Online Exam';
+                      const isPerQ = q.timer_mode === 'per_question';
+
+                      return (
+                        <div key={q.id} className="p-3.5 rounded-2xl bg-[#131c31] border border-slate-700/50 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded border ${
+                                isExam
+                                  ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              }`}
                             >
-                              Start Exam
-                            </button>
-                          ) : (
-                            <button
-                              disabled
-                              className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 text-[11px] font-bold flex items-center gap-1 cursor-not-allowed"
-                            >
-                              <Lock className="w-3 h-3 text-amber-400" /> Locked
-                            </button>
+                              {q.assessment_type || 'Quiz'}
+                            </span>
+                            {prevSub && (
+                              <span className="text-[10px] font-mono font-bold text-emerald-400">
+                                Score: {prevSub.score}/{q.total_marks || 100}
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="font-bold text-xs text-white line-clamp-1">{q.title}</h4>
+
+                          {prevSub?.teacher_feedback && (
+                            <p className="text-[10px] text-blue-300 bg-blue-500/10 px-2.5 py-1.5 rounded-lg border border-blue-500/20 flex items-start gap-1.5">
+                              <MessageSquare className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
+                              <span>{prevSub.teacher_feedback}</span>
+                            </p>
                           )}
+
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {isPerQ ? `${q.per_question_seconds || 60}s / Q` : `${q.duration_minutes} Mins`}
+                            </span>
+
+                            {!isUnlocked ? (
+                              <button
+                                disabled
+                                className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 text-[11px] font-bold flex items-center gap-1 cursor-not-allowed"
+                              >
+                                <Lock className="w-3 h-3 text-amber-400" /> Locked
+                              </button>
+                            ) : isExam && prevSub ? (
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+                                Completed
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleStartQuiz(q)}
+                                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                  isExam
+                                    ? 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white'
+                                    : 'bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-900'
+                                }`}
+                              >
+                                {isExam ? 'Start Exam' : prevSub ? 'Retake Quiz' : 'Start Quiz'}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -711,106 +891,248 @@ export default function StudentPortal() {
         </div>
       )}
 
-      {/* QUIZ MODAL */}
+      {/* SECURE ONLINE EXAM & QUIZ MODAL */}
       {activeQuiz && isUnlocked && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 overflow-y-auto select-none">
           <div className="bg-[#0c1322] border border-slate-800 text-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative">
+            {/* Dynamic Anti-Cheat Watermark */}
             {activeQuiz.enable_watermark && (
-              <div className="pointer-events-none select-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden opacity-[0.06] rotate-[-25deg]">
-                <div className="text-center font-mono font-black text-xl text-white space-y-6">
-                  <p>{studentInfo?.name} • {studentInfo?.phone}</p>
-                  <p>{studentInfo?.indexNo} • {currentCourse?.title}</p>
+              <div className="pointer-events-none select-none fixed inset-0 z-20 flex items-center justify-center overflow-hidden opacity-[0.05] rotate-[-25deg]">
+                <div className="text-center font-mono font-black text-2xl text-white space-y-12">
+                  <p>{studentInfo?.name} • {studentInfo?.indexNo} • {studentInfo?.phone}</p>
+                  <p>{currentCourse?.title} • {activeQuiz.title}</p>
+                  <p>{studentInfo?.name} • {studentInfo?.indexNo} • {studentInfo?.phone}</p>
                 </div>
               </div>
             )}
 
+            {/* Sticky Top Bar */}
             <div className="sticky top-0 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800/80 px-6 py-4 flex items-center justify-between z-30">
               <div>
-                <h3 className="font-bold text-sm text-white">{activeQuiz.title}</h3>
-                <span className="text-[10px] text-slate-400">{questions.length} Questions</span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded border ${
+                      activeQuiz.assessment_type === 'Online Exam'
+                        ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    }`}
+                  >
+                    {activeQuiz.assessment_type || 'Quiz'}
+                  </span>
+                  <h3 className="font-bold text-sm text-white">{activeQuiz.title}</h3>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {activeQuiz.timer_mode === 'per_question'
+                    ? `Question ${currentQuestionIdx + 1} of ${questions.length} • Locked Auto-Advance Mode`
+                    : `${questions.length} Questions • Anti-Cheat Guard Active`}
+                </span>
               </div>
 
               {!quizSubmitted && (
                 <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-400 font-mono font-bold text-sm">
                   <Clock className="w-4 h-4 animate-pulse" />
-                  <span>{formatTime(timeLeft)}</span>
+                  <span>
+                    {activeQuiz.timer_mode === 'per_question'
+                      ? formatTime(questionTimeLeft)
+                      : formatTime(timeLeft)}
+                  </span>
                 </div>
               )}
 
               {quizSubmitted && (
-                <button onClick={() => setActiveQuiz(null)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer">
-                  Close Exam
+                <button
+                  onClick={() => setActiveQuiz(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+                >
+                  Close
                 </button>
               )}
             </div>
 
             <div className="p-6 space-y-6 relative z-10">
+              {/* Anti-Cheat Strike Warning Banner */}
+              {cheatAlertMsg && !quizSubmitted && (
+                <div className="p-4 rounded-2xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs flex items-center gap-2.5 animate-pulse">
+                  <ShieldAlert className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  <span className="font-semibold">{cheatAlertMsg}</span>
+                </div>
+              )}
+
+              {/* Result Summary after submission */}
               {quizSubmitted && (
                 <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/40 p-6 rounded-2xl text-center space-y-2">
                   <Award className="w-12 h-12 text-yellow-400 mx-auto" />
-                  <h4 className="text-lg font-bold text-white">Quiz Completed!</h4>
+                  <h4 className="text-lg font-bold text-white">{activeQuiz.assessment_type || 'Quiz'} Submitted!</h4>
                   <p className="text-3xl font-black text-purple-300">
                     Score: {score} / {questions.reduce((a, b) => a + (b.marks || 10), 0)}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Your answers have been recorded for your teacher&apos;s review.
                   </p>
                 </div>
               )}
 
-              <div className="space-y-4">
-                {questions.map((q, qIdx) => {
-                  const studentAns = selectedAnswers[qIdx];
-                  const isCorrect = studentAns === q.correct_option;
+              {/* MODE A: PER-QUESTION TIMED VIEW (Before Submission) */}
+              {!quizSubmitted && activeQuiz.timer_mode === 'per_question' && questions[currentQuestionIdx] && (() => {
+                const q = questions[currentQuestionIdx];
+                const studentAns = selectedAnswers[q.id];
 
-                  return (
-                    <div key={q.id} className="bg-[#070b14] border border-slate-800/80 p-5 rounded-2xl space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <h5 className="font-semibold text-sm text-slate-200">{qIdx + 1}. {q.question_text}</h5>
-                        {quizSubmitted && (
-                          isCorrect ? (
-                            <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                              <CheckCircle2 className="w-3 h-3" /> Correct
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-[10px] text-red-400 font-bold bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20">
-                              <XCircle className="w-3 h-3" /> Incorrect
-                            </span>
-                          )
-                        )}
+                return (
+                  <div className="space-y-5">
+                    <div className="bg-[#070b14] border border-slate-800/80 p-6 rounded-2xl space-y-4">
+                      <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                        <span>Question {currentQuestionIdx + 1} / {questions.length}</span>
+                        <span className="text-purple-400">{q.marks || 10} Marks</span>
                       </div>
 
-                      <div className="space-y-2">
-                        {q.options.map((opt: string, optIdx: number) => {
-                          let optStyle = "border-slate-700 bg-[#0c1322] text-slate-300 hover:border-purple-500/50 cursor-pointer";
-                          if (!quizSubmitted) {
-                            if (studentAns === optIdx) optStyle = "border-purple-500 bg-purple-500/20 text-white font-bold";
-                          } else {
-                            if (optIdx === q.correct_option) optStyle = "border-emerald-500 bg-emerald-500/20 text-emerald-300 font-bold";
-                            else if (studentAns === optIdx && !isCorrect) optStyle = "border-red-500 bg-red-500/20 text-red-300 line-through";
-                          }
+                      <h5 className="font-semibold text-base text-white leading-relaxed">
+                        {currentQuestionIdx + 1}. {q.question_text}
+                      </h5>
 
-                          return (
-                            <button
-                              key={optIdx}
-                              disabled={quizSubmitted}
-                              onClick={() => setSelectedAnswers(prev => ({ ...prev, [qIdx]: optIdx }))}
-                              className={`w-full text-left p-3.5 rounded-xl border text-xs transition ${optStyle}`}
-                            >
-                              {opt}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {q.question_type === 'free_answer' ? (
+                        <div className="space-y-2">
+                          <label className="text-[11px] text-slate-400 block">Type your answer below:</label>
+                          <textarea
+                            rows={3}
+                            placeholder="Write your answer here..."
+                            value={typeof studentAns === 'string' ? studentAns : ''}
+                            onChange={(e) => setSelectedAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                            className="w-full bg-[#0c1322] border border-slate-700 rounded-xl p-3.5 text-xs text-white focus:outline-none focus:border-purple-500 select-text"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {(q.options || []).map((opt: string, optIdx: number) => {
+                            const isSelected = studentAns === optIdx;
+                            return (
+                              <button
+                                key={optIdx}
+                                type="button"
+                                onClick={() => setSelectedAnswers((prev) => ({ ...prev, [q.id]: optIdx }))}
+                                className={`w-full text-left p-3.5 rounded-xl border text-xs transition cursor-pointer ${
+                                  isSelected
+                                    ? 'border-purple-500 bg-purple-500/20 text-white font-bold'
+                                    : 'border-slate-700 bg-[#0c1322] text-slate-300 hover:border-purple-500/50'
+                                }`}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
 
-              {!quizSubmitted && (
-                <button
-                  onClick={handleSubmitQuiz}
-                  className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition shadow-lg shadow-purple-600/30 cursor-pointer"
-                >
-                  Submit Answers
-                </button>
+                    <button
+                      type="button"
+                      onClick={handleNextPerQuestion}
+                      className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition shadow-lg shadow-purple-600/30 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <span>
+                        {currentQuestionIdx + 1 < questions.length
+                          ? 'Save & Next Question (Cannot Return)'
+                          : 'Submit Final Answers'}
+                      </span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* MODE B: WHOLE EXAM VIEW OR POST-SUBMISSION REVIEW */}
+              {(quizSubmitted || activeQuiz.timer_mode !== 'per_question') && (
+                <>
+                  <div className="space-y-4">
+                    {questions.map((q, qIdx) => {
+                      const studentAns = selectedAnswers[q.id];
+                      const isFree = q.question_type === 'free_answer';
+                      const isCorrect = isFree
+                        ? Boolean(
+                            q.sample_answer &&
+                              typeof studentAns === 'string' &&
+                              studentAns.trim().toLowerCase() === q.sample_answer.trim().toLowerCase()
+                          )
+                        : studentAns === q.correct_option;
+
+                      return (
+                        <div key={q.id} className="bg-[#070b14] border border-slate-800/80 p-5 rounded-2xl space-y-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <h5 className="font-semibold text-sm text-slate-200">
+                              {qIdx + 1}. {q.question_text}
+                            </h5>
+                            {quizSubmitted && (
+                              isFree ? (
+                                <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20 flex-shrink-0">
+                                  Submitted for Review
+                                </span>
+                              ) : isCorrect ? (
+                                <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 flex-shrink-0">
+                                  <CheckCircle2 className="w-3 h-3" /> Correct
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-[10px] text-red-400 font-bold bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20 flex-shrink-0">
+                                  <XCircle className="w-3 h-3" /> Incorrect
+                                </span>
+                              )
+                            )}
+                          </div>
+
+                          {isFree ? (
+                            <div className="space-y-2">
+                              <textarea
+                                rows={2}
+                                disabled={quizSubmitted}
+                                placeholder="Type your answer here..."
+                                value={typeof studentAns === 'string' ? studentAns : ''}
+                                onChange={(e) => setSelectedAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                                className="w-full bg-[#0c1322] border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-purple-500 select-text"
+                              />
+                              {quizSubmitted && q.sample_answer && (
+                                <p className="text-[11px] text-emerald-400">
+                                  Expected Answer: <strong>{q.sample_answer}</strong>
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {(q.options || []).map((opt: string, optIdx: number) => {
+                                let optStyle = "border-slate-700 bg-[#0c1322] text-slate-300 hover:border-purple-500/50 cursor-pointer";
+                                if (!quizSubmitted) {
+                                  if (studentAns === optIdx) optStyle = "border-purple-500 bg-purple-500/20 text-white font-bold";
+                                } else {
+                                  if (optIdx === q.correct_option) optStyle = "border-emerald-500 bg-emerald-500/20 text-emerald-300 font-bold";
+                                  else if (studentAns === optIdx && !isCorrect) optStyle = "border-red-500 bg-red-500/20 text-red-300 line-through";
+                                }
+
+                                return (
+                                  <button
+                                    key={optIdx}
+                                    type="button"
+                                    disabled={quizSubmitted}
+                                    onClick={() => setSelectedAnswers((prev) => ({ ...prev, [q.id]: optIdx }))}
+                                    className={`w-full text-left p-3.5 rounded-xl border text-xs transition ${optStyle}`}
+                                  >
+                                    {opt}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {!quizSubmitted && (
+                    <button
+                      type="button"
+                      onClick={() => handleSubmitQuiz(tabStrikes)}
+                      className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition shadow-lg shadow-purple-600/30 cursor-pointer"
+                    >
+                      Submit Answers
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
