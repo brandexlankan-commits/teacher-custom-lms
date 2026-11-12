@@ -42,6 +42,9 @@ export default function StudentPortal() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [score, setScore] = useState(0);
 
+  // Access Control Flag (Unlocked only when teacher approves bank slip)
+  const isUnlocked = slipStatus === 'Approved';
+
   useEffect(() => {
     // Check local session
     const savedStudent = localStorage.getItem('lms_student_session');
@@ -174,6 +177,11 @@ export default function StudentPortal() {
   };
 
   const handleJoinClass = async () => {
+    if (!isUnlocked) {
+      alert('Access Locked: Please upload your bank slip and wait for teacher approval to join live classes.');
+      return;
+    }
+
     const zoomLink = activeMeeting?.join_url || currentCourse?.zoom_link;
     if (!zoomLink) {
       alert('A Zoom meeting has not been started for this class yet.');
@@ -230,7 +238,7 @@ export default function StudentPortal() {
 
       setSlipStatus('Pending');
       setSlipFile(null);
-      alert('Your bank slip has been uploaded successfully!');
+      alert('Your bank slip has been uploaded successfully! Lessons will unlock once approved by your teacher.');
     } catch (err: any) {
       alert('Upload Error: ' + err.message);
     } finally {
@@ -239,6 +247,11 @@ export default function StudentPortal() {
   };
 
   const handleStartQuiz = async (quiz: any) => {
+    if (!isUnlocked) {
+      alert('Access Locked: Please upload your bank slip and wait for teacher approval to take online exams.');
+      return;
+    }
+
     const { data: qData } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quiz.id);
     if (qData && qData.length > 0) {
       setQuestions(qData);
@@ -410,12 +423,16 @@ export default function StudentPortal() {
             <div className={`p-1 rounded-2xl border bg-gradient-to-r ${
               slipStatus === 'Approved' ? 'from-emerald-900/40 to-teal-900/20 border-emerald-500/30' : 
               slipStatus === 'Pending' ? 'from-amber-900/40 to-yellow-900/20 border-amber-500/30' : 
+              slipStatus === 'Rejected' ? 'from-red-900/40 to-rose-900/20 border-red-500/30' :
               'from-purple-900/40 to-pink-900/20 border-purple-500/30'
             }`}>
               <div className="bg-[#0c1322] rounded-xl p-5 md:p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <CreditCard className={`w-5 h-5 ${slipStatus === 'Approved' ? 'text-emerald-400' : 'text-purple-400'}`} />
+                    <CreditCard className={`w-5 h-5 ${
+                      slipStatus === 'Approved' ? 'text-emerald-400' : 
+                      slipStatus === 'Rejected' ? 'text-red-400' : 'text-purple-400'
+                    }`} />
                     <h3 className="font-bold text-sm text-white">{currentCourse.title} - Class Fees</h3>
                   </div>
                   
@@ -425,11 +442,15 @@ export default function StudentPortal() {
                     </div>
                   ) : slipStatus === 'Pending' ? (
                     <div className="text-xs text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 inline-flex items-center gap-1.5">
-                      <Clock className="w-4 h-4" /> Bank slip uploaded (Pending). Please wait for your teacher&apos;s approval.
+                      <Clock className="w-4 h-4" /> Bank slip uploaded (Pending). Lessons will unlock once your teacher approves it.
+                    </div>
+                  ) : slipStatus === 'Rejected' ? (
+                    <div className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20 inline-flex items-center gap-1.5">
+                      <XCircle className="w-4 h-4" /> Previous bank slip was rejected. Please upload a valid bank slip (Rs. {currentCourse.monthly_fee}/-) to unlock lessons.
                     </div>
                   ) : (
                     <div className="text-xs text-slate-300">
-                      Monthly Fee: <strong className="text-emerald-400 font-mono text-sm">Rs. {currentCourse.monthly_fee}/-</strong>. Select and upload your bank slip photo or PDF below.
+                      Monthly Fee: <strong className="text-emerald-400 font-mono text-sm">Rs. {currentCourse.monthly_fee}/-</strong>. Upload your bank slip photo or PDF below to unlock lessons.
                     </div>
                   )}
                 </div>
@@ -478,7 +499,7 @@ export default function StudentPortal() {
                 </div>
               </div>
 
-              {activeMeeting && (
+              {activeMeeting && isUnlocked && (
                 <div className="flex items-center gap-4 text-xs font-mono text-slate-400 bg-[#070b14] p-3 rounded-xl border border-slate-800/60 w-fit">
                   <span>Meeting ID: <strong className="text-white">{activeMeeting.meeting_id || 'Direct'}</strong></span>
                   <span>Passcode: <strong className="text-emerald-400">{activeMeeting.password || 'None'}</strong></span>
@@ -486,19 +507,30 @@ export default function StudentPortal() {
               )}
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
-                <button
-                  onClick={handleJoinClass}
-                  disabled={!activeMeeting?.join_url && !currentCourse.zoom_link}
-                  className={`px-6 py-3 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg transition ${
-                    activeMeeting?.join_url || currentCourse.zoom_link 
-                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30 cursor-pointer' 
-                      : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                  }`}
-                >
-                  <Video className="w-4 h-4" />
-                  <span>Join Live Class (Marks Attendance)</span>
-                </button>
-                {attendanceMarked && (
+                {!isUnlocked ? (
+                  <button
+                    disabled
+                    className="px-6 py-3 rounded-2xl font-bold text-xs flex items-center gap-2 bg-slate-800/80 border border-slate-700 text-slate-400 cursor-not-allowed"
+                  >
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    <span>Locked • Payment Approval Required</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleJoinClass}
+                    disabled={!activeMeeting?.join_url && !currentCourse.zoom_link}
+                    className={`px-6 py-3 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg transition ${
+                      activeMeeting?.join_url || currentCourse.zoom_link 
+                        ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30 cursor-pointer' 
+                        : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <Video className="w-4 h-4" />
+                    <span>Join Live Class (Marks Attendance)</span>
+                  </button>
+                )}
+
+                {attendanceMarked && isUnlocked && (
                   <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-3 py-2 rounded-xl border border-emerald-500/20">
                     <CheckCircle2 className="w-4 h-4" /> Attendance Marked!
                   </span>
@@ -520,12 +552,21 @@ export default function StudentPortal() {
                     {recordings.map((rec) => (
                       <div key={rec.id} className="p-3.5 rounded-2xl bg-[#131c31] border border-slate-700/50">
                         <h4 className="font-bold text-xs text-white line-clamp-1 mb-2">{rec.title}</h4>
-                        <button
-                          onClick={() => setActiveVideoId(rec.youtube_video_id)}
-                          className="w-full py-2 rounded-xl bg-red-600/10 hover:bg-red-600 hover:text-white text-red-400 text-xs font-semibold transition cursor-pointer"
-                        >
-                          Watch Lesson
-                        </button>
+                        {isUnlocked ? (
+                          <button
+                            onClick={() => setActiveVideoId(rec.youtube_video_id)}
+                            className="w-full py-2 rounded-xl bg-red-600/10 hover:bg-red-600 hover:text-white text-red-400 text-xs font-semibold transition cursor-pointer"
+                          >
+                            Watch Lesson
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="w-full py-2 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-not-allowed"
+                          >
+                            <Lock className="w-3.5 h-3.5 text-amber-400" /> Locked (Approval Required)
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -544,9 +585,15 @@ export default function StudentPortal() {
                     {materials.map((m) => (
                       <div key={m.id} className="p-3.5 rounded-2xl bg-[#131c31] border border-slate-700/50 flex items-center justify-between">
                         <h4 className="font-bold text-xs text-white line-clamp-1 pr-2">{m.title}</h4>
-                        <a href={m.file_url} target="_blank" rel="noreferrer" className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white transition">
-                          <Download className="w-4 h-4" />
-                        </a>
+                        {isUnlocked ? (
+                          <a href={m.file_url} target="_blank" rel="noreferrer" className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white transition">
+                            <Download className="w-4 h-4" />
+                          </a>
+                        ) : (
+                          <span title="Payment approval required to download" className="p-2 rounded-lg bg-slate-800 text-slate-500 cursor-not-allowed">
+                            <Lock className="w-4 h-4 text-amber-400" />
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -567,12 +614,21 @@ export default function StudentPortal() {
                         <h4 className="font-bold text-xs text-white line-clamp-1">{q.title}</h4>
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] text-slate-400 font-mono">{q.duration_minutes} Mins</span>
-                          <button
-                            onClick={() => handleStartQuiz(q)}
-                            className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-900 text-[11px] font-bold transition cursor-pointer"
-                          >
-                            Start Exam
-                          </button>
+                          {isUnlocked ? (
+                            <button
+                              onClick={() => handleStartQuiz(q)}
+                              className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-900 text-[11px] font-bold transition cursor-pointer"
+                            >
+                              Start Exam
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 text-[11px] font-bold flex items-center gap-1 cursor-not-allowed"
+                            >
+                              <Lock className="w-3 h-3 text-amber-400" /> Locked
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -585,7 +641,7 @@ export default function StudentPortal() {
       </main>
 
       {/* VIDEO MODAL */}
-      {activeVideoId && (
+      {activeVideoId && isUnlocked && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
           <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl p-4">
             <div className="flex items-center justify-between px-2 mb-4">
@@ -608,7 +664,7 @@ export default function StudentPortal() {
       )}
 
       {/* QUIZ MODAL */}
-      {activeQuiz && (
+      {activeQuiz && isUnlocked && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-y-auto">
           <div className="bg-[#0c1322] border border-slate-800 text-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative">
             {activeQuiz.enable_watermark && (
