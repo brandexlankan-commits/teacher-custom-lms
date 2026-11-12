@@ -16,12 +16,12 @@ export default function HomePage() {
           </div>
           <div>
             <h1 className="font-bold text-sm tracking-tight text-white">Smart Tuition LMS</h1>
-            <span className="text-[10px] text-purple-400 uppercase tracking-widest font-semibold">Teacher Custom Build</span>
+            <span className="text-[10px] text-purple-400 uppercase tracking-widest font-semibold">Official Learning Portal</span>
           </div>
         </div>
 
         <span className="text-[11px] font-mono px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300">
-          Live Interactive Demo
+          Student & Teacher Hub
         </span>
       </header>
 
@@ -45,7 +45,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* 2 Quick Demo Action Cards */}
+        {/* 2 Quick Portal Action Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto pt-4 text-left">
           
           {/* Card 1: Teacher Control Panel */}
@@ -80,7 +80,7 @@ export default function HomePage() {
             </div>
             <div>
               <h3 className="font-bold text-base text-white flex items-center gap-2">
-                <span>Demo Student Portal</span>
+                <span>Student Learning Portal</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition text-indigo-400" />
               </h3>
               <p className="text-xs text-slate-400 mt-1">
