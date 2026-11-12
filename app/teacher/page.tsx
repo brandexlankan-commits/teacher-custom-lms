@@ -7,11 +7,11 @@ import {
   Users, BookOpen, Video, HelpCircle, Plus, 
   Settings, CheckCircle2, XCircle, ExternalLink, 
   GraduationCap, ArrowLeft, Loader2, KeyRound, 
-  Radio, Share2, Layers, AlertCircle, Smartphone, 
+  Radio, Share2, Layers, AlertCircle, 
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
   Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut, Upload, Clock,
   ShieldAlert, MessageSquare, ChevronDown, ChevronUp, Edit3, RefreshCw,
-  TrendingUp, TrendingDown, Minus, Printer
+  TrendingUp, TrendingDown, Minus, Printer, ShieldCheck
 } from 'lucide-react';
 
 interface DraftQuestion {
@@ -23,7 +23,36 @@ interface DraftQuestion {
   marks: number;
 }
 
+function getColomboDateInfo() {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' }); // 'YYYY-MM-DD'
+  const currentMonth = todayStr.slice(0, 7); // 'YYYY-MM'
+  const dayOfMonth = Number(todayStr.slice(8, 10));
+  return { todayStr, currentMonth, dayOfMonth };
+}
+
+function formatMonthLabel(ym: string): string {
+  if (!ym || !ym.includes('-')) return ym;
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, (m || 1) - 1, 1);
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function getSelectableBillingMonths(baseYm: string): string[] {
+  if (!baseYm || !baseYm.includes('-')) return [];
+  const [y, m] = baseYm.split('-').map(Number);
+  const offsets = [-1, 0, 1];
+  return offsets.map((offset) => {
+    const d = new Date(y, (m || 1) - 1 + offset, 1);
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    return `${yr}-${mo}`;
+  });
+}
+
 export default function TeacherMasterDashboard() {
+  const [dateInfo, setDateInfo] = useState({ todayStr: '', currentMonth: '', dayOfMonth: 1 });
+  const { todayStr, currentMonth, dayOfMonth } = dateInfo;
+
   // Teacher Auth States
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
@@ -54,6 +83,13 @@ export default function TeacherMasterDashboard() {
   // Selected Course Management State
   const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'zoom' | 'students' | 'recordings' | 'content' | 'quizzes'>('zoom');
+
+  // Student Flexible Payment & Access Override Modal States
+  const [selectedStudentForAccess, setSelectedStudentForAccess] = useState<any | null>(null);
+  const [manualPayMonth, setManualPayMonth] = useState<string>('');
+  const [extensionDateInput, setExtensionDateInput] = useState<string>('');
+  const [freeCardToggle, setFreeCardToggle] = useState<boolean>(false);
+  const [isSavingAccessOverride, setIsSavingAccessOverride] = useState<boolean>(false);
 
   // Student Performance Report Modal States
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<any | null>(null);
@@ -117,6 +153,10 @@ export default function TeacherMasterDashboard() {
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
 
   useEffect(() => {
+    const info = getColomboDateInfo();
+    setDateInfo(info);
+    setManualPayMonth(info.currentMonth);
+
     const savedAuth = localStorage.getItem('lms_teacher_session');
     if (savedAuth === 'authenticated') {
       setIsAuthenticated(true);
@@ -257,11 +297,41 @@ export default function TeacherMasterDashboard() {
   };
 
   const loadCourseDetails = async (courseId: string) => {
+    const activeMonth = currentMonth || getColomboDateInfo().currentMonth;
+
     const { data: mtg } = await supabase.from('zoom_meetings').select('*').eq('course_id', courseId).order('created_at', { ascending: false }).limit(1).maybeSingle();
     setActiveMeeting(mtg || null);
 
-    const { data: enr } = await supabase.from('enrollments').select('student_id, is_active, students(*)').eq('course_id', courseId);
-    if (enr) setStudents(enr.map(e => ({ ...e.students, is_active: e.is_active })));
+    const { data: slp } = await supabase
+      .from('slips')
+      .select('*, students(full_name, index_number, whatsapp_number)')
+      .eq('course_id', courseId)
+      .order('submitted_at', { ascending: false });
+    if (slp) setSlips(slp);
+
+    const { data: enr } = await supabase
+      .from('enrollments')
+      .select('id, student_id, is_active, is_free_card, access_until, students(*)')
+      .eq('course_id', courseId);
+
+    if (enr) {
+      const approvedStudentIdsThisMonth = new Set(
+        (slp || [])
+          .filter((s: any) => s.status === 'Approved' && (s.billing_month || '') === activeMonth)
+          .map((s: any) => s.student_id)
+      );
+
+      setStudents(
+        enr.map((e: any) => ({
+          ...e.students,
+          enrollment_id: e.id,
+          is_active: e.is_active,
+          is_free_card: Boolean(e.is_free_card),
+          access_until: e.access_until || '',
+          is_current_month_paid: approvedStudentIdsThisMonth.has(e.student_id)
+        }))
+      );
+    }
 
     const { data: mat } = await supabase.from('materials').select('*').eq('course_id', courseId).order('created_at', { ascending: false });
     if (mat) setMaterials(mat);
@@ -271,19 +341,95 @@ export default function TeacherMasterDashboard() {
 
     const { data: qz } = await supabase.from('quizzes').select('*, quiz_questions(count)').eq('course_id', courseId).order('created_at', { ascending: false });
     if (qz) setQuizzes(qz);
-
-    const { data: slp } = await supabase.from('slips').select('*, students(full_name, index_number, whatsapp_number)').eq('course_id', courseId).order('submitted_at', { ascending: false });
-    if (slp) setSlips(slp);
   };
 
-  // Student Performance Report Viewer Logic (with Class Names & Month-over-Month Analytics)
+  // Flexible Payment & Access Override Handlers
+  const handleOpenAccessModal = (student: any) => {
+    const activeMonth = currentMonth || getColomboDateInfo().currentMonth;
+    setSelectedStudentForAccess(student);
+    setManualPayMonth(activeMonth);
+    setExtensionDateInput(student.access_until || '');
+    setFreeCardToggle(Boolean(student.is_free_card));
+  };
+
+  const handleSaveEnrollmentAccessRules = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentForAccess || !selectedCourse) return;
+    setIsSavingAccessOverride(true);
+
+    try {
+      const { error } = await supabase
+        .from('enrollments')
+        .update({
+          is_free_card: freeCardToggle,
+          access_until: extensionDateInput.trim() || null
+        })
+        .eq('student_id', selectedStudentForAccess.id)
+        .eq('course_id', selectedCourse.id);
+
+      if (error) throw new Error(error.message);
+
+      await loadCourseDetails(selectedCourse.id);
+      setSelectedStudentForAccess(null);
+      alert('Student access rules updated successfully!');
+    } catch (err: any) {
+      alert('Error updating access: ' + err.message);
+    } finally {
+      setIsSavingAccessOverride(false);
+    }
+  };
+
+  const handleManualMarkMonthPaid = async () => {
+    const targetMonth = manualPayMonth || getColomboDateInfo().currentMonth;
+    if (!selectedStudentForAccess || !selectedCourse || !targetMonth) return;
+    setIsSavingAccessOverride(true);
+
+    try {
+      const { data: existingSlip } = await supabase
+        .from('slips')
+        .select('id')
+        .eq('student_id', selectedStudentForAccess.id)
+        .eq('course_id', selectedCourse.id)
+        .eq('billing_month', targetMonth)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingSlip) {
+        const { error } = await supabase
+          .from('slips')
+          .update({ status: 'Approved' })
+          .eq('id', existingSlip.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabase.from('slips').insert([
+          {
+            student_id: selectedStudentForAccess.id,
+            course_id: selectedCourse.id,
+            billing_month: targetMonth,
+            slip_url: 'MANUAL_TEACHER_APPROVAL',
+            status: 'Approved'
+          }
+        ]);
+        if (error) throw new Error(error.message);
+      }
+
+      await loadCourseDetails(selectedCourse.id);
+      setSelectedStudentForAccess(null);
+      alert(`${selectedStudentForAccess.full_name} marked as PAID for ${formatMonthLabel(targetMonth)}!`);
+    } catch (err: any) {
+      alert('Error marking payment: ' + err.message);
+    } finally {
+      setIsSavingAccessOverride(false);
+    }
+  };
+
+  // Student Performance Report Viewer Logic
   const handleOpenStudentReport = async (student: any) => {
     setSelectedStudentForReport(student);
     setExpandedSubmissionId(null);
     setLoadingReport(true);
 
     try {
-      // 1. Fetch Quiz Submissions with Quiz Details
       const { data: qSubs } = await supabase
         .from('quiz_submissions')
         .select('*, quizzes(title, duration_minutes, total_marks, assessment_type, timer_mode)')
@@ -302,7 +448,6 @@ export default function TeacherMasterDashboard() {
         setScoreInputs(initialScores);
       }
 
-      // 2. Fetch Attendance Logs with Course Names
       const { data: attLogs } = await supabase
         .from('attendance')
         .select('*, courses(title)')
@@ -317,7 +462,6 @@ export default function TeacherMasterDashboard() {
     }
   };
 
-  // Compute Month-over-Month Progress Metrics for Parent Report
   const getProgressAnalytics = () => {
     const now = new Date();
     const thisMonth = now.getMonth();
@@ -332,7 +476,6 @@ export default function TeacherMasterDashboard() {
       return d.getMonth() === m && d.getFullYear() === y;
     };
 
-    // Verified Attendance counts ('Present' only, excluding incomplete early leaves)
     const verifiedAttendance = studentAttendanceLogs.filter(
       (a) => a.status === 'Present' || !String(a.status || '').startsWith('Joined')
     );
@@ -341,7 +484,6 @@ export default function TeacherMasterDashboard() {
     const lastMonthAtt = verifiedAttendance.filter((a) => isSameMonthYear(a.marked_at, lastMonth, lastMonthYear)).length;
     const attDiff = thisMonthAtt - lastMonthAtt;
 
-    // Exam & Quiz Percentage Averages
     const calcPct = (sub: any) => {
       const total = Number(sub.quizzes?.total_marks || 100);
       return total > 0 ? Math.round((Number(sub.score || 0) / total) * 100) : 0;
@@ -385,7 +527,6 @@ export default function TeacherMasterDashboard() {
     };
   };
 
-  // Generate Clean A4 Printable / Save-as-PDF Parent Progress Report
   const handlePrintParentReport = () => {
     if (!selectedStudentForReport) return;
     const analytics = getProgressAnalytics();
@@ -605,7 +746,6 @@ export default function TeacherMasterDashboard() {
     printWindow.document.close();
   };
 
-  // Expand a specific Exam Submission to inspect each answer and leave teacher remark
   const handleToggleSubmissionDetails = async (submission: any) => {
     if (expandedSubmissionId === submission.id) {
       setExpandedSubmissionId(null);
@@ -697,7 +837,6 @@ export default function TeacherMasterDashboard() {
     }
   };
 
-  // Sync Real Zoom Participant Durations from Zoom Servers
   const handleSyncZoomAttendance = async () => {
     if (!selectedCourse || !activeMeeting?.meeting_id) {
       alert('No active Zoom meeting ID found to sync.');
@@ -742,7 +881,6 @@ export default function TeacherMasterDashboard() {
     alert('Secure LMS Class Invite copied to clipboard!');
   };
 
-  // Student Actions: Auto Generate Username & Password
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentName || !selectedCourse) return;
@@ -881,7 +1019,6 @@ export default function TeacherMasterDashboard() {
     if (selectedCourse) loadCourseDetails(selectedCourse.id);
   };
 
-  // Multi-Question Exam & Quiz Builder Handlers
   const handleAddQuestionToList = () => {
     if (!qText.trim()) {
       alert('Please enter the question text.');
@@ -1136,6 +1273,7 @@ export default function TeacherMasterDashboard() {
   }
 
   const reportAnalytics = selectedStudentForReport ? getProgressAnalytics() : null;
+  const selectableMonths = getSelectableBillingMonths(currentMonth);
 
   // ================= AUTHENTICATED TEACHER DASHBOARD =================
   return (
@@ -1365,7 +1503,7 @@ export default function TeacherMasterDashboard() {
                   activeTab === 'content' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <BookOpen className="w-4 h-4" /> Tutes & Notes ({materials.length})
+                <BookOpen className="w-4 h-4" /> Tutes &amp; Notes ({materials.length})
               </button>
 
               <button
@@ -1374,11 +1512,11 @@ export default function TeacherMasterDashboard() {
                   activeTab === 'quizzes' ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <HelpCircle className="w-4 h-4" /> Exams & Quizzes ({quizzes.length})
+                <HelpCircle className="w-4 h-4" /> Exams &amp; Quizzes ({quizzes.length})
               </button>
             </div>
 
-            {/* TAB 1: ZOOM (ANTI-LINK-SHARING + MINIMUM STAY ATTENDANCE + ZOOM SERVER SYNC) */}
+            {/* TAB 1: ZOOM */}
             {activeTab === 'zoom' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <form onSubmit={handleCreateZoomMeeting} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
@@ -1481,7 +1619,7 @@ export default function TeacherMasterDashboard() {
               </div>
             )}
 
-            {/* TAB 2: STUDENT MANAGEMENT WITH REPORTS, CREDENTIALS & 1-CLICK SHARE */}
+            {/* TAB 2: STUDENT MANAGEMENT WITH FLEXIBLE ACCESS CONTROLS, REPORTS & MONTHLY SLIPS */}
             {activeTab === 'students' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1527,74 +1665,111 @@ export default function TeacherMasterDashboard() {
                     </div>
 
                     <button type="submit" className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-purple-600/30">
-                      Enroll & Generate Login Credentials
+                      Enroll &amp; Generate Login Credentials
                     </button>
                   </form>
 
-                  {/* Enrolled Students List with Performance Report Button */}
+                  {/* Enrolled Students List with Flexible Access Control + Performance Report Button */}
                   <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
                         <Users className="w-4 h-4 text-purple-400" /> Enrolled Students &amp; Parent Reports
                       </h3>
-                      <span className="text-xs text-slate-400">{students.length} Total Enrolled</span>
+                      <span className="text-xs text-slate-400">
+                        {students.length} Total {currentMonth ? `• ${formatMonthLabel(currentMonth)}` : ''}
+                      </span>
                     </div>
 
                     {students.length === 0 ? (
                       <p className="text-xs text-slate-500 py-8 text-center">No students enrolled yet.</p>
                     ) : (
-                      <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
-                        {students.map((st) => (
-                          <div key={st.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="space-y-1.5">
-                              <h4 className="font-bold text-sm text-white flex items-center gap-2">
-                                {st.full_name}
-                              </h4>
-                              
-                              <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-                                <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-purple-400">
-                                  User: <strong>{st.index_number}</strong>
-                                </span>
-                                <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-emerald-400 flex items-center gap-1">
-                                  <Key className="w-3 h-3" /> Pass: <strong>{st.password || st.whatsapp_number || '123456'}</strong>
-                                </span>
-                                <span className="text-slate-400 text-[11px]">
-                                  📱 {st.whatsapp_number}
-                                </span>
+                      <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                        {students.map((st) => {
+                          const hasExt = Boolean(todayStr && st.access_until && todayStr <= st.access_until);
+                          const inGrace = Boolean(todayStr) && dayOfMonth <= 15;
+
+                          return (
+                            <div key={st.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="space-y-1.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="font-bold text-sm text-white">{st.full_name}</h4>
+                                  {st.is_free_card ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                      Free Card
+                                    </span>
+                                  ) : st.is_current_month_paid ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                      Paid ({currentMonth})
+                                    </span>
+                                  ) : hasExt ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                                      Extended until {st.access_until}
+                                    </span>
+                                  ) : inGrace ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                      Grace Period (1st–15th)
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
+                                      Payment Due
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                                  <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-purple-400">
+                                    User: <strong>{st.index_number}</strong>
+                                  </span>
+                                  <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-emerald-400 flex items-center gap-1">
+                                    <Key className="w-3 h-3" /> Pass: <strong>{st.password || st.whatsapp_number || '123456'}</strong>
+                                  </span>
+                                  <span className="text-slate-400 text-[11px]">
+                                    📱 {st.whatsapp_number}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Actions: Access Override + View Report + Copy Login + Device Unlock */}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  onClick={() => handleOpenAccessModal(st)}
+                                  title="Manually mark paid, extend access date, or set Free Card"
+                                  className="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                                >
+                                  <ShieldCheck className="w-3.5 h-3.5" />
+                                  <span>Access</span>
+                                </button>
+
+                                <button
+                                  onClick={() => handleOpenStudentReport(st)}
+                                  title="View progress charts, monthly comparison, exam remarks, and export PDF report"
+                                  className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-blue-600/30"
+                                >
+                                  <BarChart3 className="w-3.5 h-3.5" />
+                                  <span>Report</span>
+                                </button>
+
+                                <button
+                                  onClick={() => handleCopyStudentLogin(st)}
+                                  title="Copy login details WhatsApp message"
+                                  className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Login</span>
+                                </button>
+
+                                <button
+                                  onClick={() => handleUnlockDevice(st.id)}
+                                  title="Reset device lock to allow student to log in from a new device"
+                                  className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                                >
+                                  <Unlock className="w-3.5 h-3.5" />
+                                  <span>Unlock</span>
+                                </button>
                               </div>
                             </div>
-
-                            {/* Actions: View Report + Copy Login + Device Unlock */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                onClick={() => handleOpenStudentReport(st)}
-                                title="View progress charts, monthly comparison, exam remarks, and export PDF report"
-                                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-blue-600/30"
-                              >
-                                <BarChart3 className="w-3.5 h-3.5" />
-                                <span>Report</span>
-                              </button>
-
-                              <button
-                                onClick={() => handleCopyStudentLogin(st)}
-                                title="Copy login details WhatsApp message"
-                                className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>Login</span>
-                              </button>
-
-                              <button
-                                onClick={() => handleUnlockDevice(st.id)}
-                                title="Reset device lock to allow student to log in from a new device"
-                                className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
-                              >
-                                <Unlock className="w-3.5 h-3.5" />
-                                <span>Unlock</span>
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1607,59 +1782,77 @@ export default function TeacherMasterDashboard() {
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
                         <CreditCard className="w-4 h-4 text-emerald-400" /> Student Bank Slips &amp; Payment Status
                       </h3>
-                      <p className="text-xs text-slate-400">Review student bank slips and approve or reject payments.</p>
+                      <p className="text-xs text-slate-400">Review student bank slips by billing month and approve or reject payments.</p>
                     </div>
-                    <span className="text-xs font-mono font-bold text-emerald-400">{slips.length} Slips Submitted</span>
+                    <span className="text-xs font-mono font-bold text-emerald-400">{slips.length} Slips Recorded</span>
                   </div>
 
                   {slips.length === 0 ? (
                     <p className="text-xs text-slate-500 py-6 text-center">No bank slips submitted yet.</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {slips.map((slp) => (
-                        <div key={slp.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h4 className="font-bold text-xs text-white">{slp.students?.full_name}</h4>
-                              <span className="text-[10px] text-slate-400 font-mono">ID: {slp.students?.index_number}</span>
-                            </div>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                              slp.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                              slp.status === 'Rejected' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                              'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            }`}>
-                              {slp.status}
-                            </span>
-                          </div>
+                      {slips.map((slp) => {
+                        const isManualEntry = slp.slip_url === 'MANUAL_TEACHER_APPROVAL';
 
-                          <div className="pt-1">
-                            <a
-                              href={slp.slip_url} target="_blank" rel="noreferrer"
-                              className="text-xs text-blue-400 hover:underline flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800"
-                            >
-                              <FileText className="w-4 h-4" />
-                              <span className="truncate">View Uploaded Slip ➔</span>
-                            </a>
-                          </div>
-
-                          {slp.status !== 'Approved' && (
-                            <div className="flex items-center gap-2 pt-1">
-                              <button
-                                onClick={() => handleUpdateSlipStatus(slp.id, 'Approved')}
-                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => handleUpdateSlipStatus(slp.id, 'Rejected')}
-                                className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                              >
-                                Reject
-                              </button>
+                        return (
+                          <div key={slp.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h4 className="font-bold text-xs text-white">{slp.students?.full_name}</h4>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-slate-400 font-mono">ID: {slp.students?.index_number}</span>
+                                  {slp.billing_month && (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                      {formatMonthLabel(slp.billing_month)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex-shrink-0 ${
+                                slp.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                                slp.status === 'Rejected' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}>
+                                {slp.status}
+                              </span>
                             </div>
-                          )}
-                        </div>
-                      ))}
+
+                            <div className="pt-1">
+                              {isManualEntry ? (
+                                <div className="text-xs text-emerald-300 flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                  <span className="truncate">Manual Teacher Approval (No Slip)</span>
+                                </div>
+                              ) : (
+                                <a
+                                  href={slp.slip_url} target="_blank" rel="noreferrer"
+                                  className="text-xs text-blue-400 hover:underline flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800"
+                                >
+                                  <FileText className="w-4 h-4 flex-shrink-0" />
+                                  <span className="truncate">View Uploaded Slip ➔</span>
+                                </a>
+                              )}
+                            </div>
+
+                            {slp.status !== 'Approved' && (
+                              <div className="flex items-center gap-2 pt-1">
+                                <button
+                                  onClick={() => handleUpdateSlipStatus(slp.id, 'Approved')}
+                                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateSlipStatus(slp.id, 'Rejected')}
+                                  className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2165,12 +2358,140 @@ export default function TeacherMasterDashboard() {
         )}
       </main>
 
+      {/* ================= MODAL: FLEXIBLE PAYMENT & ACCESS OVERRIDE ================= */}
+      {selectedStudentForAccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-lg p-6 md:p-7 shadow-2xl space-y-5">
+            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  <span>Manage Student Access &amp; Fees</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {selectedStudentForAccess.full_name} (<span className="font-mono text-purple-400">{selectedStudentForAccess.index_number}</span>)
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedStudentForAccess(null)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Option A: Manual Mark Month as Paid (for WhatsApp slips or cash payments) */}
+            <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 space-y-3">
+              <div>
+                <h4 className="text-xs font-bold text-white">1. Manual Payment Approval (Without Student Slip Upload)</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Approve a specific billing month directly if the student sent the slip on WhatsApp or paid in cash.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={manualPayMonth}
+                  onChange={(e) => setManualPayMonth(e.target.value)}
+                  className="flex-1 bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-semibold"
+                >
+                  {selectableMonths.map((ym) => (
+                    <option key={ym} value={ym}>
+                      {formatMonthLabel(ym)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={isSavingAccessOverride}
+                  onClick={handleManualMarkMonthPaid}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Mark Month Paid</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Option B & C: Temporary Extension Date & Free Card */}
+            <form onSubmit={handleSaveEnrollmentAccessRules} className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 space-y-3">
+                <div>
+                  <h4 className="text-xs font-bold text-white">2. Temporary Access Extension (Custom Due Date)</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Grant temporary access until a specific date (e.g. 20th of the month). Access locks automatically after that date.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={extensionDateInput}
+                    onChange={(e) => setExtensionDateInput(e.target.value)}
+                    className="flex-1 bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                  {currentMonth && (
+                    <button
+                      type="button"
+                      onClick={() => setExtensionDateInput(`${currentMonth}-20`)}
+                      className="px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 text-[11px] font-bold transition cursor-pointer"
+                    >
+                      Until 20th
+                    </button>
+                  )}
+                  {extensionDateInput && (
+                    <button
+                      type="button"
+                      onClick={() => setExtensionDateInput('')}
+                      className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 text-[11px] font-bold transition cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <label className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 flex items-center justify-between gap-3 cursor-pointer">
+                <div>
+                  <span className="text-xs font-bold text-white block">3. Free Card (Permanent Exemption)</span>
+                  <span className="text-[11px] text-slate-400">
+                    Student retains uninterrupted access every month without payment locks.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={freeCardToggle}
+                  onChange={(e) => setFreeCardToggle(e.target.checked)}
+                  className="w-4 h-4 accent-emerald-500 cursor-pointer"
+                />
+              </label>
+
+              <div className="flex items-center justify-end gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudentForAccess(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingAccessOverride}
+                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingAccessOverride ? 'Saving...' : 'Save Access Rules'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ================= MODAL: OFFICIAL PARENT PROGRESS REPORT WITH CHARTS, MONTH COMPARISON & PDF EXPORT ================= */}
       {selectedStudentForReport && reportAnalytics && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-y-auto p-6 md:p-8 shadow-2xl space-y-6">
             
-            {/* Header with Student Summary & 1-Click Parent PDF Export */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold">
@@ -2215,7 +2536,6 @@ export default function TeacherMasterDashboard() {
             ) : (
               <div className="space-y-6">
                 
-                {/* 1. Overall Summary Cards */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
                     <span className="text-[10px] text-slate-400 font-bold uppercase">Exams &amp; Quizzes</span>
@@ -2231,16 +2551,13 @@ export default function TeacherMasterDashboard() {
                   </div>
                 </div>
 
-                {/* 2. Month-over-Month Development Comparison & Visual Progress Chart */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Left: Last Month vs This Month Comparison */}
                   <div className="bg-[#070b14] border border-slate-800/90 p-5 rounded-2xl space-y-4">
                     <h4 className="text-xs font-bold text-white flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-emerald-400" />
                       Monthly Progress ({reportAnalytics.lastMonthLabel} vs {reportAnalytics.thisMonthLabel})
                     </h4>
 
-                    {/* Attendance Monthly Comparison */}
                     <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-slate-400 font-semibold">Class Attendance</span>
@@ -2281,7 +2598,6 @@ export default function TeacherMasterDashboard() {
                       </div>
                     </div>
 
-                    {/* Exam Score Monthly Comparison */}
                     <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-slate-400 font-semibold">Exam &amp; Quiz Average</span>
@@ -2323,7 +2639,6 @@ export default function TeacherMasterDashboard() {
                     </div>
                   </div>
 
-                  {/* Right: Visual Score Progression Chart */}
                   <div className="bg-[#070b14] border border-slate-800/90 p-5 rounded-2xl flex flex-col justify-between space-y-4">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-white flex items-center gap-2">
@@ -2380,7 +2695,6 @@ export default function TeacherMasterDashboard() {
                   </div>
                 </div>
 
-                {/* 3. Detailed Exam & Quiz Submissions with Answer Review + Teacher Remarks */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
                     <Award className="w-4 h-4 text-amber-400" /> Exam Marks, Answers &amp; Teacher Remarks
@@ -2562,7 +2876,6 @@ export default function TeacherMasterDashboard() {
                   )}
                 </div>
 
-                {/* 4. Class-wise Attendance Log */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-blue-400" /> Zoom Class Attendance History (By Class)

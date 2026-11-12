@@ -89,6 +89,7 @@ function formatMonthLabel(ym: string): string {
 }
 
 function getSelectableBillingMonths(baseYm: string): string[] {
+  if (!baseYm || !baseYm.includes('-')) return [];
   const [y, m] = baseYm.split('-').map(Number);
   const offsets = [-1, 0, 1];
   return offsets.map((offset) => {
@@ -100,7 +101,8 @@ function getSelectableBillingMonths(baseYm: string): string[] {
 }
 
 export default function StudentPortal() {
-  const { todayStr, currentMonth, dayOfMonth } = getColomboDateInfo();
+  const [dateInfo, setDateInfo] = useState({ todayStr: '', currentMonth: '', dayOfMonth: 1 });
+  const { todayStr, currentMonth, dayOfMonth } = dateInfo;
 
   const [studentInfo, setStudentInfo] = useState<any | null>(null);
   const [currentCourse, setCurrentCourse] = useState<any | null>(null);
@@ -144,7 +146,7 @@ export default function StudentPortal() {
   const [attendanceStatus, setAttendanceStatus] = useState<string | null>(null);
 
   // Monthly Bank Slip File Upload States
-  const [selectedBillingMonth, setSelectedBillingMonth] = useState<string>(currentMonth);
+  const [selectedBillingMonth, setSelectedBillingMonth] = useState<string>('');
   const [studentSlips, setStudentSlips] = useState<any[]>([]);
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
@@ -167,13 +169,17 @@ export default function StudentPortal() {
   const selectedMonthSlip = studentSlips.find((s) => (s.billing_month || '') === selectedBillingMonth) || null;
 
   const isFreeCard = Boolean(enrollmentInfo?.is_free_card);
-  const hasValidExtension = Boolean(enrollmentInfo?.access_until && todayStr <= enrollmentInfo.access_until);
-  const isWithinGracePeriod = dayOfMonth <= 15;
+  const hasValidExtension = Boolean(todayStr && enrollmentInfo?.access_until && todayStr <= enrollmentInfo.access_until);
+  const isWithinGracePeriod = Boolean(todayStr) && dayOfMonth <= 15;
   const isCurrentMonthApproved = currentMonthSlip?.status === 'Approved';
 
   const isUnlocked = isFreeCard || hasValidExtension || isWithinGracePeriod || isCurrentMonthApproved;
 
   useEffect(() => {
+    const info = getColomboDateInfo();
+    setDateInfo(info);
+    setSelectedBillingMonth(info.currentMonth);
+
     const savedStudent = localStorage.getItem('lms_student_session');
     if (savedStudent) {
       try {
@@ -567,12 +573,13 @@ export default function StudentPortal() {
 
   const handleUploadSlip = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!slipFile || !currentCourse || !studentInfo || !selectedBillingMonth) return;
+    const targetMonth = selectedBillingMonth || getColomboDateInfo().currentMonth;
+    if (!slipFile || !currentCourse || !studentInfo || !targetMonth) return;
     setIsUploadingSlip(true);
 
     try {
       const fileExt = slipFile.name.split('.').pop() || 'jpg';
-      const filePath = `slips/${studentInfo.indexNo}_${selectedBillingMonth}_${Date.now()}.${fileExt}`;
+      const filePath = `slips/${studentInfo.indexNo}_${targetMonth}_${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('lms-files')
@@ -592,7 +599,7 @@ export default function StudentPortal() {
           {
             student_id: studentInfo.id,
             course_id: currentCourse.id,
-            billing_month: selectedBillingMonth,
+            billing_month: targetMonth,
             slip_url: urlData.publicUrl,
             status: 'Pending'
           }
@@ -608,7 +615,7 @@ export default function StudentPortal() {
         setStudentSlips((prev) => [insertedSlip, ...prev]);
       }
       setSlipFile(null);
-      alert(`Bank slip for ${formatMonthLabel(selectedBillingMonth)} uploaded successfully! Waiting for teacher approval.`);
+      alert(`Bank slip for ${formatMonthLabel(targetMonth)} uploaded successfully! Waiting for teacher approval.`);
     } catch (err: any) {
       alert('Upload Error: ' + err.message);
     } finally {
@@ -938,9 +945,11 @@ export default function StudentPortal() {
                       !isUnlocked ? 'text-red-400' : 'text-purple-400'
                     }`} />
                     <h3 className="font-bold text-sm text-white">{currentCourse.title} - Class Fees</h3>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                      {formatMonthLabel(currentMonth)}
-                    </span>
+                    {currentMonth && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                        {formatMonthLabel(currentMonth)}
+                      </span>
+                    )}
                   </div>
                   
                   {isFreeCard ? (
