@@ -309,10 +309,18 @@ export default function TeacherMasterDashboard() {
       .order('submitted_at', { ascending: false });
     if (slp) setSlips(slp);
 
-    const { data: enr } = await supabase
+    let { data: enr, error: enrErr } = await supabase
       .from('enrollments')
-      .select('id, student_id, is_active, is_free_card, access_until, students(*)')
+      .select('student_id, is_active, is_free_card, access_until, students(*)')
       .eq('course_id', courseId);
+
+    if (enrErr) {
+      const fallbackEnr = await supabase
+        .from('enrollments')
+        .select('student_id, is_active, students(*)')
+        .eq('course_id', courseId);
+      enr = fallbackEnr.data as any;
+    }
 
     if (enr) {
       const approvedStudentIdsThisMonth = new Set(
@@ -322,14 +330,15 @@ export default function TeacherMasterDashboard() {
       );
 
       setStudents(
-        enr.map((e: any) => ({
-          ...e.students,
-          enrollment_id: e.id,
-          is_active: e.is_active,
-          is_free_card: Boolean(e.is_free_card),
-          access_until: e.access_until || '',
-          is_current_month_paid: approvedStudentIdsThisMonth.has(e.student_id)
-        }))
+        enr
+          .filter((e: any) => e.students)
+          .map((e: any) => ({
+            ...e.students,
+            is_active: e.is_active,
+            is_free_card: Boolean(e.is_free_card),
+            access_until: e.access_until || '',
+            is_current_month_paid: approvedStudentIdsThisMonth.has(e.student_id)
+          }))
       );
     }
 
