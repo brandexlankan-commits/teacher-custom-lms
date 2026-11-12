@@ -807,12 +807,10 @@ export default function TeacherMasterDashboard() {
     e.preventDefault();
     if (!recordingTitle || !recordingId || !selectedCourse) return;
     
-    let cleanId = recordingId.trim();
-    if (cleanId.includes('v=')) {
-      cleanId = cleanId.split('v=')[1].split('&')[0];
-    } else if (cleanId.includes('youtu.be/')) {
-      cleanId = cleanId.split('youtu.be/')[1].split('?')[0];
-    }
+    const trimmed = recordingId.trim();
+    const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = trimmed.match(regExp);
+    const cleanId = match ? match[1] : trimmed;
 
     const { error } = await supabase.from('recordings').insert([{
       course_id: selectedCourse.id,
@@ -1537,7 +1535,7 @@ export default function TeacherMasterDashboard() {
                   <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                     <div className="flex items-center justify-between">
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Parent Reports
+                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students &amp; Parent Reports
                       </h3>
                       <span className="text-xs text-slate-400">{students.length} Total Enrolled</span>
                     </div>
@@ -1607,7 +1605,7 @@ export default function TeacherMasterDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-emerald-400" /> Student Bank Slips & Payment Status
+                        <CreditCard className="w-4 h-4 text-emerald-400" /> Student Bank Slips &amp; Payment Status
                       </h3>
                       <p className="text-xs text-slate-400">Review student bank slips and approve or reject payments.</p>
                     </div>
@@ -1676,7 +1674,9 @@ export default function TeacherMasterDashboard() {
                     <PlaySquare className="w-5 h-5 text-red-400" />
                     <h3 className="font-bold text-sm text-white">Add Past Lesson Recording</h3>
                   </div>
-                  <p className="text-xs text-slate-400">Enter the YouTube video link or video ID for the class lesson recording.</p>
+                  <p className="text-xs text-slate-400">
+                    Enter the YouTube video link or video ID for the class lesson recording (set video to Unlisted on YouTube for privacy).
+                  </p>
 
                   <div className="space-y-3">
                     <div>
@@ -1689,7 +1689,7 @@ export default function TeacherMasterDashboard() {
                     <div>
                       <label className="text-[11px] text-slate-300 font-semibold mb-1 block">YouTube Video ID / URL</label>
                       <input
-                        type="text" placeholder="e.g. dQw4w9WgXcQ" value={recordingId}
+                        type="text" placeholder="e.g. https://youtu.be/dQw4w9WgXcQ" value={recordingId}
                         onChange={(e) => setRecordingId(e.target.value)} className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                       />
                     </div>
@@ -2096,7 +2096,7 @@ export default function TeacherMasterDashboard() {
 
                 <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
                   <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" /> Published Exams & Quizzes ({quizzes.length})
+                    <Award className="w-4 h-4 text-amber-400" /> Published Exams &amp; Quizzes ({quizzes.length})
                   </h3>
 
                   {quizzes.length === 0 ? (
@@ -2218,7 +2218,7 @@ export default function TeacherMasterDashboard() {
                 {/* 1. Overall Summary Cards */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Exams & Quizzes</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Exams &amp; Quizzes</span>
                     <h4 className="text-xl font-black text-white mt-1">{studentQuizResults.length}</h4>
                   </div>
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
