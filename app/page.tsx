@@ -35,13 +35,13 @@ export default function HomePage() {
 
         <div className="space-y-3">
           <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-            උපකාරක පන්ති කළමනාකරණය <br />
+            Manage Your Tuition Classes <br />
             <span className="bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              Smart තාක්ෂණයෙන් එකම තැනකින්
+              All in One Place with Smart Technology
             </span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
-            පැමිණීම සටහන් කිරීම, Countdown Timer සහිත Online විභාග, PDF නිබන්ධන බෙදාහැරීම සහ 1-Click නිල ප්‍රගති වාර්තා සමඟ නවීනතම LMS පද්ධතිය.
+            A modern LMS platform featuring automated attendance tracking, online exams with countdown timers, PDF tute distribution, and 1-click official progress reports.
           </p>
         </div>
 
@@ -62,11 +62,11 @@ export default function HomePage() {
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition text-purple-400" />
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                පැමිණීම බැලීම, අලුත් Tutes & Quizzes දැමීම සහ ශිෂ්‍ය Progress Report එක PDF ලෙස ලබාගැනීම.
+                Track attendance, publish new tutes & quizzes, and view detailed student progress reports.
               </p>
             </div>
             <span className="inline-block text-[11px] font-bold text-purple-400 group-hover:underline">
-              Control Panel එකට පිවිසෙන්න →
+              Enter Control Panel →
             </span>
           </Link>
 
@@ -84,11 +84,11 @@ export default function HomePage() {
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition text-indigo-400" />
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                1-Click Zoom Class, Tute බාගත කිරීම සහ Timer එක සහිත සජීවී Online Quiz එක පරීක්ෂා කිරීම.
+                Access 1-click Zoom classes, download study tutes, and take timed live online quizzes.
               </p>
             </div>
             <span className="inline-block text-[11px] font-bold text-indigo-400 group-hover:underline">
-              ශිෂ්‍ය ගිණුමට පිවිසෙන්න →
+              Enter Student Portal →
             </span>
           </Link>
 

@@ -70,7 +70,7 @@ export default function StudentPortal() {
     setIsLoggingIn(true);
 
     try {
-      // Index No හෝ Phone Number එකෙන් Student සෙවීම
+      // Search student by Index No or Phone Number
       const { data: stu, error } = await supabase
         .from('students')
         .select('*')
@@ -79,7 +79,7 @@ export default function StudentPortal() {
         .maybeSingle();
 
       if (error || !stu) {
-        setLoginError('ඇතුළත් කළ Index අංකය හෝ දුරකථන අංකය වැරදිය.');
+        setLoginError('Invalid Index Number or WhatsApp Number.');
         setIsLoggingIn(false);
         return;
       }
@@ -87,7 +87,7 @@ export default function StudentPortal() {
       // Password Verification (default '123456' or student phone)
       const validPassword = stu.password || stu.whatsapp_number || '123456';
       if (loginPassword.trim() !== validPassword) {
-        setLoginError('මුරපදය (Password) වැරදිය.');
+        setLoginError('Incorrect Password.');
         setIsLoggingIn(false);
         return;
       }
@@ -96,10 +96,10 @@ export default function StudentPortal() {
       const currentDeviceId = getDeviceFingerprint();
 
       if (!stu.device_id) {
-        // පළමු වරට ලොග් වන Device එක Lock කරගැනීම
+        // Lock account to the first device used to log in
         await supabase.from('students').update({ device_id: currentDeviceId }).eq('id', stu.id);
       } else if (stu.device_id !== currentDeviceId) {
-        setLoginError('⚠️ ඔබගේ ගිණුම දැනටමත් වෙනත් Phone එකකට හෝ පරිගණකයකට සම්බන්ධ කර ඇත. නව Device එකකින් Login වීමට ගුරුතුමා අමතා Device Unlock කරවා ගන්න.');
+        setLoginError('⚠️ Your account is already linked to another phone or computer. Please contact your teacher to unlock your device before logging in from a new device.');
         setIsLoggingIn(false);
         return;
       }
@@ -108,7 +108,7 @@ export default function StudentPortal() {
       localStorage.setItem('lms_student_session', JSON.stringify(stu));
       await verifyAndLoadStudent(stu.id);
     } catch (err: any) {
-      setLoginError('Login දෝෂයක්: ' + err.message);
+      setLoginError('Login Error: ' + err.message);
     } finally {
       setIsLoggingIn(false);
     }
@@ -136,7 +136,7 @@ export default function StudentPortal() {
       phone: stu.whatsapp_number
     });
 
-    // Enrolled Class එක සොයා ගැනීම
+    // Find Enrolled Class
     const { data: enrollments } = await supabase
       .from('enrollments')
       .select('course_id, courses(*)')
@@ -176,11 +176,11 @@ export default function StudentPortal() {
   const handleJoinClass = async () => {
     const zoomLink = activeMeeting?.join_url || currentCourse?.zoom_link;
     if (!zoomLink) {
-      alert('මෙම පන්තිය සඳහා Zoom Meeting එකක් තවම ආරම්භ කර නැත.');
+      alert('A Zoom meeting has not been started for this class yet.');
       return;
     }
 
-    // Attendance Mark කිරීම
+    // Mark Attendance
     if (studentInfo && currentCourse) {
       await supabase.from('attendance').insert([{
         student_id: studentInfo.id,
@@ -204,7 +204,7 @@ export default function StudentPortal() {
     if (!error) {
       setSlipStatus('Pending');
       setSlipUrl('');
-      alert('ඔබගේ බැංකු රිසිට්පත සාර්ථකව යොමු කෙරිණි.');
+      alert('Your bank slip has been submitted successfully.');
     }
     setIsUploadingSlip(false);
   };
@@ -219,7 +219,7 @@ export default function StudentPortal() {
       setQuizSubmitted(false);
       setScore(0);
     } else {
-      alert('මෙම විභාගය සඳහා ප්‍රශ්න තවම ඇතුළත් කර නොමැත.');
+      alert('Questions have not been added to this quiz yet.');
     }
   };
 
@@ -272,7 +272,7 @@ export default function StudentPortal() {
               <GraduationCap className="w-7 h-7 text-white" />
             </div>
             <h2 className="text-xl font-black text-white">Student Portal Login</h2>
-            <p className="text-xs text-slate-400">ඔබගේ පන්තියේ අධ්‍යයන කටයුතු සඳහා පිවිසෙන්න</p>
+            <p className="text-xs text-slate-400">Sign in to access your class lessons and study materials</p>
           </div>
 
           {loginError && (
@@ -284,10 +284,10 @@ export default function StudentPortal() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Index Number හෝ WhatsApp අංකය</label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Index Number or WhatsApp Number</label>
               <input
                 type="text"
-                placeholder="උදා: ST-001 හෝ 0771234567"
+                placeholder="e.g. ST-001 or 0771234567"
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
@@ -296,7 +296,7 @@ export default function StudentPortal() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">මුරපදය (Password)</label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Password</label>
               <input
                 type="password"
                 placeholder="••••••••"
@@ -305,7 +305,7 @@ export default function StudentPortal() {
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
                 required
               />
-              <span className="text-[10px] text-slate-500 mt-1 block">* මුරපදය නොදන්නේ නම් ඔබගේ WhatsApp දුරකථන අංකය ලබා දෙන්න.</span>
+              <span className="text-[10px] text-slate-500 mt-1 block">* If you don't know your password, please enter your WhatsApp phone number.</span>
             </div>
 
             <button
@@ -314,13 +314,13 @@ export default function StudentPortal() {
               className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer disabled:opacity-50"
             >
               <KeyRound className="w-4 h-4" />
-              <span>{isLoggingIn ? 'සත්‍යාපනය වෙමින්...' : 'Login to Student Hub'}</span>
+              <span>{isLoggingIn ? 'Verifying...' : 'Login to Student Hub'}</span>
             </button>
           </form>
 
           <div className="pt-2 text-center border-t border-slate-800">
             <span className="text-[11px] text-slate-500 flex items-center justify-center gap-1">
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Single Device Security සක්‍රියයි
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Single Device Security Active
             </span>
           </div>
         </div>
@@ -333,7 +333,7 @@ export default function StudentPortal() {
     return (
       <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center text-slate-400 space-y-3">
         <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-xs font-mono">ශිෂ්‍ය ගිණුම පරීක්ෂා වෙමින් පවතී...</p>
+        <p className="text-xs font-mono">Verifying student account...</p>
       </div>
     );
   }
@@ -372,8 +372,8 @@ export default function StudentPortal() {
         {!currentCourse ? (
           <div className="p-8 text-center bg-[#0c1322] border border-slate-800 rounded-3xl space-y-3">
             <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
-            <h3 className="font-bold text-base text-white">ඔබ තවමත් කිසිදු පන්තියකට Enroll කර නොමැත.</h3>
-            <p className="text-xs text-slate-400">කරුණාකර ගුරුතුමා අමතා ඔබගේ Index අංකය පන්තියට ලියාපදිංචි කරවා ගන්න.</p>
+            <h3 className="font-bold text-base text-white">You are not enrolled in any class yet.</h3>
+            <p className="text-xs text-slate-400">Please contact your teacher to get your Index Number registered for the class.</p>
           </div>
         ) : (
           <>
@@ -387,20 +387,20 @@ export default function StudentPortal() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <CreditCard className={`w-5 h-5 ${slipStatus === 'Approved' ? 'text-emerald-400' : 'text-purple-400'}`} />
-                    <h3 className="font-bold text-sm text-white">{currentCourse.title} - පන්ති ගාස්තු</h3>
+                    <h3 className="font-bold text-sm text-white">{currentCourse.title} - Class Fees</h3>
                   </div>
                   
                   {slipStatus === 'Approved' ? (
                     <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" /> ගෙවීම් තහවුරු කර ඇත. සියලු පාඩම් සඳහා ප්‍රවේශය හිමිව ඇත.
+                      <CheckCircle2 className="w-4 h-4" /> Payment verified. You now have full access to all lessons.
                     </div>
                   ) : slipStatus === 'Pending' ? (
                     <div className="text-xs text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 inline-flex items-center gap-1.5">
-                      <Clock className="w-4 h-4" /> බැංකු රිසිට්පත යොමු කර ඇත (Pending). ගුරුතුමා අනුමත කරන තෙක් රැඳී සිටින්න.
+                      <Clock className="w-4 h-4" /> Bank slip submitted (Pending). Please wait for your teacher's approval.
                     </div>
                   ) : (
                     <div className="text-xs text-slate-300">
-                      මාසික ගාස්තුව: <strong className="text-emerald-400 font-mono text-sm">Rs. {currentCourse.monthly_fee}/-</strong> කි. පහතින් Bank Slip එකක් Upload කරන්න.
+                      Monthly Fee: <strong className="text-emerald-400 font-mono text-sm">Rs. {currentCourse.monthly_fee}/-</strong>. Upload your bank slip link below.
                     </div>
                   )}
                 </div>
@@ -439,8 +439,8 @@ export default function StudentPortal() {
                   </h2>
                   <p className="text-xs text-slate-400">
                     {activeMeeting 
-                      ? `නියමිත කාලය: විනාඩි ${activeMeeting.duration_minutes} කි. Join Class ඔබා සජීවීව සම්බන්ධ වී Attendance ලකුණු කරගන්න.`
-                      : 'Zoom Session එක සූදානම් කර ඇති විට Join Class ඔබා සම්බන්ධ විය හැක.'}
+                      ? `Scheduled Duration: ${activeMeeting.duration_minutes} minutes. Click Join Class to connect live and mark your attendance.`
+                      : 'Once the Zoom session is ready, click Join Class to connect.'}
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
@@ -466,11 +466,11 @@ export default function StudentPortal() {
                   }`}
                 >
                   <Video className="w-4 h-4" />
-                  <span>Join Live Class (Attendance සටහන් වේ)</span>
+                  <span>Join Live Class (Marks Attendance)</span>
                 </button>
                 {attendanceMarked && (
                   <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-3 py-2 rounded-xl border border-emerald-500/20">
-                    <CheckCircle2 className="w-4 h-4" /> Attendance සටහන් විය!
+                    <CheckCircle2 className="w-4 h-4" /> Attendance Marked!
                   </span>
                 )}
               </div>
@@ -484,7 +484,7 @@ export default function StudentPortal() {
                   <PlaySquare className="w-4 h-4 text-red-400" /> Past Recordings ({recordings.length})
                 </h3>
                 {recordings.length === 0 ? (
-                  <p className="text-xs text-slate-500">Recordings නැත.</p>
+                  <p className="text-xs text-slate-500">No recordings available.</p>
                 ) : (
                   <div className="space-y-3 max-h-72 overflow-y-auto">
                     {recordings.map((rec) => (
@@ -508,7 +508,7 @@ export default function StudentPortal() {
                   <BookOpen className="w-4 h-4 text-emerald-400" /> Tutes & Handouts ({materials.length})
                 </h3>
                 {materials.length === 0 ? (
-                  <p className="text-xs text-slate-500">Tutes Upload කර නැත.</p>
+                  <p className="text-xs text-slate-500">No tutes uploaded yet.</p>
                 ) : (
                   <div className="space-y-3 max-h-72 overflow-y-auto">
                     {materials.map((m) => (
@@ -529,7 +529,7 @@ export default function StudentPortal() {
                   <HelpCircle className="w-4 h-4 text-amber-400" /> Quizzes & Papers
                 </h3>
                 {quizzes.length === 0 ? (
-                  <p className="text-xs text-slate-500">Quizzes සකසා නැත.</p>
+                  <p className="text-xs text-slate-500">No quizzes available.</p>
                 ) : (
                   <div className="space-y-3 max-h-72 overflow-y-auto">
                     {quizzes.map((q) => (
@@ -593,7 +593,7 @@ export default function StudentPortal() {
             <div className="sticky top-0 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800/80 px-6 py-4 flex items-center justify-between z-30">
               <div>
                 <h3 className="font-bold text-sm text-white">{activeQuiz.title}</h3>
-                <span className="text-[10px] text-slate-400">ප්‍රශ්න {questions.length} කි</span>
+                <span className="text-[10px] text-slate-400">{questions.length} Questions</span>
               </div>
 
               {!quizSubmitted && (
@@ -614,9 +614,9 @@ export default function StudentPortal() {
               {quizSubmitted && (
                 <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/40 p-6 rounded-2xl text-center space-y-2">
                   <Award className="w-12 h-12 text-yellow-400 mx-auto" />
-                  <h4 className="text-lg font-bold text-white">ප්‍රශ්නාවලිය අවසන්!</h4>
+                  <h4 className="text-lg font-bold text-white">Quiz Completed!</h4>
                   <p className="text-3xl font-black text-purple-300">
-                    ලකුණු: {score} / {questions.reduce((a, b) => a + (b.marks || 10), 0)}
+                    Score: {score} / {questions.reduce((a, b) => a + (b.marks || 10), 0)}
                   </p>
                 </div>
               )}
@@ -633,11 +633,11 @@ export default function StudentPortal() {
                         {quizSubmitted && (
                           isCorrect ? (
                             <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                              <CheckCircle2 className="w-3 h-3" /> නිවැරදියි
+                              <CheckCircle2 className="w-3 h-3" /> Correct
                             </span>
                           ) : (
                             <span className="flex items-center gap-1 text-[10px] text-red-400 font-bold bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20">
-                              <XCircle className="w-3 h-3" /> වැරදියි
+                              <XCircle className="w-3 h-3" /> Incorrect
                             </span>
                           )
                         )}
@@ -675,7 +675,7 @@ export default function StudentPortal() {
                   onClick={handleSubmitQuiz}
                   className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition shadow-lg shadow-purple-600/30 cursor-pointer"
                 >
-                  පිළිතුරු Submit කරන්න
+                  Submit Answers
                 </button>
               )}
             </div>

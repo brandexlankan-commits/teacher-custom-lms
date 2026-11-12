@@ -9,10 +9,18 @@ import {
   GraduationCap, ArrowLeft, Loader2, KeyRound, 
   Radio, Share2, Layers, AlertCircle, Smartphone, 
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
-  Copy, Key, BarChart3, Award, Calendar, X
+  Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut
 } from 'lucide-react';
 
 export default function TeacherMasterDashboard() {
+  // Teacher Auth States
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [teacherUser, setTeacherUser] = useState('');
+  const [teacherPass, setTeacherPass] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const [mainView, setMainView] = useState<'classes' | 'zoom_config'>('classes');
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,9 +81,55 @@ export default function TeacherMasterDashboard() {
   const [correctOpt, setCorrectOpt] = useState('0');
 
   useEffect(() => {
-    fetchCourses();
-    fetchZoomSettings();
+    const savedAuth = localStorage.getItem('lms_teacher_session');
+    if (savedAuth === 'authenticated') {
+      setIsAuthenticated(true);
+      fetchCourses();
+      fetchZoomSettings();
+    }
+    setAuthChecking(false);
   }, []);
+
+  const handleTeacherLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsLoggingIn(true);
+
+    try {
+      const res = await fetch('/api/teacher-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: teacherUser,
+          password: teacherPass
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthError(data.error || 'Authentication failed.');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      localStorage.setItem('lms_teacher_session', 'authenticated');
+      setIsAuthenticated(true);
+      setTeacherUser('');
+      setTeacherPass('');
+      fetchCourses();
+      fetchZoomSettings();
+    } catch (err: any) {
+      setAuthError('Login Error: ' + err.message);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleTeacherLogout = () => {
+    localStorage.removeItem('lms_teacher_session');
+    setIsAuthenticated(false);
+    setSelectedCourse(null);
+  };
 
   const fetchCourses = async () => {
     setLoading(true);
@@ -120,7 +174,7 @@ export default function TeacherMasterDashboard() {
 
     if (!err) {
       setIsZoomConfigured(true);
-      alert('Zoom API Credentials සාර්ථකව සුරැකිණි!');
+      alert('Zoom API Credentials saved successfully!');
       setMainView('classes');
     } else {
       alert('Error: ' + err.message);
@@ -140,7 +194,7 @@ export default function TeacherMasterDashboard() {
     }]);
 
     if (!error) {
-      alert('පන්තිය සාර්ථකව නිර්මාණය විය!');
+      alert('Class created successfully!');
       setShowCreateModal(false);
       setNewTitle('');
       fetchCourses();
@@ -209,7 +263,7 @@ export default function TeacherMasterDashboard() {
     if (!selectedCourse) return;
 
     if (!isZoomConfigured) {
-      alert('කරුණාකර මුලින්ම Zoom Account ටැබ් එකට ගොස් ඔබගේ Zoom Credentials ඇතුළත් කර Save කරන්න.');
+      alert('Please go to the Zoom Account tab first, enter your Zoom Credentials, and click Save.');
       setMainView('zoom_config');
       return;
     }
@@ -227,10 +281,10 @@ export default function TeacherMasterDashboard() {
       });
 
       const resData = await res.json();
-      if (!res.ok) throw new Error(resData.error || 'Meeting එක සාදා ගැනීමට නොහැකි විය');
+      if (!res.ok) throw new Error(resData.error || 'Failed to create meeting');
 
       await loadCourseDetails(selectedCourse.id);
-      alert('Zoom Live Meeting සාර්ථකව නිර්මාණය විය!');
+      alert('Zoom Live Meeting created successfully!');
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -240,16 +294,16 @@ export default function TeacherMasterDashboard() {
 
   const handleCopyWhatsAppText = () => {
     if (!activeMeeting || !selectedCourse) return;
-    const msg = `📢 *${selectedCourse.title} - සජීවී Zoom පන්තිය*\n\n` +
-      `📌 මාතෘකාව: ${activeMeeting.topic}\n` +
-      `⏱️ කාලය: විනාඩි ${activeMeeting.duration_minutes}\n\n` +
-      `🔗 පන්තියට සම්බන්ධ වීමට Link එක:\n${activeMeeting.join_url}\n\n` +
+    const msg = `📢 *${selectedCourse.title} - Live Zoom Class*\n\n` +
+      `📌 Topic: ${activeMeeting.topic}\n` +
+      `⏱️ Duration: ${activeMeeting.duration_minutes} Minutes\n\n` +
+      `🔗 Join Class Link:\n${activeMeeting.join_url}\n\n` +
       `🆔 Meeting ID: ${activeMeeting.meeting_id || 'Direct'}\n` +
       `🔑 Passcode: ${activeMeeting.password || 'None'}\n\n` +
-      `සියලු සිසුන් නියමිත වේලාවට සම්බන්ධ වන්න!`;
+      `Please join the class on time!`;
 
     navigator.clipboard.writeText(msg);
-    alert('WhatsApp ආරාධනා පණිවිඩය සාර්ථකව Copy විය!');
+    alert('WhatsApp student invite message copied successfully!');
   };
 
   // Student Actions: Auto Generate Username & Password
@@ -277,36 +331,36 @@ export default function TeacherMasterDashboard() {
       await loadCourseDetails(selectedCourse.id);
 
       const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
-        `ඔබගේ ශිෂ්‍ය ගිණුමේ විස්තර (Login Details):\n` +
+        `Your Student Portal Login Details:\n` +
         `🔗 Student Portal: ${window.location.origin}/student\n` +
         `👤 Username (Index No): *${newStu.index_number}*\n` +
         `🔑 Password: *${newStu.password || autoPassword}*\n\n` +
-        `⚠️ කරුණාකර මෙම තොරතුරු ඔබගේ දුරකථනයෙන් හෝ පරිගණකයෙන් ඇතුළත් කර Login වන්න. (පළමු වර Log වන Device එකට පමණක් ඔබගේ ගිණුම සීමා වේ)`;
+        `⚠️ Please log in using these details on your phone or computer. (Your account will be locked to the first device you log in from.)`;
 
       navigator.clipboard.writeText(credText);
-      alert(`ශිෂ්‍යයා සාර්ථකව Enroll විය!\n\nUsername: ${newStu.index_number}\nPassword: ${newStu.password || autoPassword}\n\n(WhatsApp Login Message එක දැනටමත් Copy කරගන්නා ලදී)`);
+      alert(`Student enrolled successfully!\n\nUsername: ${newStu.index_number}\nPassword: ${newStu.password || autoPassword}\n\n(WhatsApp Login Message has been copied to your clipboard)`);
     } else {
-      alert('Enrollment Error: ' + (err?.message || 'දෝෂයක් මතු විය'));
+      alert('Enrollment Error: ' + (err?.message || 'An error occurred'));
     }
   };
 
   const handleCopyStudentLogin = (st: any) => {
     if (!selectedCourse) return;
     const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
-      `ඔබගේ ශිෂ්‍ය ගිණුමේ විස්තර (Login Details):\n` +
+      `Your Student Portal Login Details:\n` +
       `🔗 Student Portal: ${window.location.origin}/student\n` +
       `👤 Username (Index No): *${st.index_number}*\n` +
       `🔑 Password: *${st.password || st.whatsapp_number || '123456'}*\n\n` +
-      `⚠️ කරුණාකර මෙම තොරතුරු ඔබගේ දුරකථනයෙන් හෝ පරිගණකයෙන් ඇතුළත් කර Login වන්න. (පළමු වර Log වන Device එකට පමණක් ඔබගේ ගිණුම සීමා වේ)`;
+      `⚠️ Please log in using these details on your phone or computer. (Your account will be locked to the first device you log in from.)`;
 
     navigator.clipboard.writeText(credText);
-    alert(`${st.full_name} සිසුවාගේ Login Details (WhatsApp Message) Copy කරගන්නා ලදී!`);
+    alert(`Login details (WhatsApp Message) for ${st.full_name} copied to clipboard!`);
   };
 
   const handleUnlockDevice = async (studentId: string) => {
     const { error } = await supabase.from('students').update({ device_id: null }).eq('id', studentId);
     if (!error) {
-      alert('Device එක සාර්ථකව Unlock කරන ලදී! ශිෂ්‍යයාට නව Device එකකින් ලොග් විය හැක.');
+      alert('Device unlocked successfully! The student can now log in from a new device.');
       loadCourseDetails(selectedCourse.id);
     } else {
       alert('Unlock Error: ' + error.message);
@@ -334,12 +388,12 @@ export default function TeacherMasterDashboard() {
       setRecordingTitle('');
       setRecordingId('');
       loadCourseDetails(selectedCourse.id);
-      alert('Recording එක සාර්ථකව එකතු විය!');
+      alert('Recording added successfully!');
     }
   };
 
   const handleDeleteRecording = async (recId: string) => {
-    if (!confirm('මෙම Recording එක ඉවත් කිරීමට අවශ්‍යද?')) return;
+    if (!confirm('Are you sure you want to remove this recording?')) return;
     await supabase.from('recordings').delete().eq('id', recId);
     loadCourseDetails(selectedCourse.id);
   };
@@ -351,7 +405,7 @@ export default function TeacherMasterDashboard() {
     setMaterialTitle('');
     setMaterialUrl('');
     loadCourseDetails(selectedCourse.id);
-    alert('Tute එක සාර්ථකව Upload විය!');
+    alert('Tute uploaded successfully!');
   };
 
   const handleCreateQuiz = async (e: React.FormEvent) => {
@@ -378,7 +432,7 @@ export default function TeacherMasterDashboard() {
       setOpt0('');
       setOpt1('');
       loadCourseDetails(selectedCourse.id);
-      alert('Quiz එක සාර්ථකව පළ විය!');
+      alert('Quiz published successfully!');
     }
   };
 
@@ -387,6 +441,85 @@ export default function TeacherMasterDashboard() {
     if (selectedCourse) loadCourseDetails(selectedCourse.id);
   };
 
+  // ================= AUTH LOADING =================
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center text-slate-400 space-y-3">
+        <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs font-mono">Checking admin session...</p>
+      </div>
+    );
+  }
+
+  // ================= TEACHER LOGIN VIEW =================
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col justify-center items-center p-6 text-white font-sans selection:bg-purple-500 selection:text-white">
+        <div className="w-full max-w-md bg-[#0c1322] border border-slate-800/90 rounded-3xl p-8 shadow-2xl space-y-6">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <span className="text-[11px] font-mono text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
+              Admin Access Only
+            </span>
+          </div>
+
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center mx-auto shadow-lg shadow-purple-600/30">
+              <Lock className="w-6 h-6 text-white" />
+            </div>
+            <h2 className="text-xl font-black text-white">Teacher Master Login</h2>
+            <p className="text-xs text-slate-400">Sign in to manage your classes, students, and Zoom sessions</p>
+          </div>
+
+          {authError && (
+            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{authError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleTeacherLogin} className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Admin Username</label>
+              <input
+                type="text"
+                placeholder="Enter username"
+                value={teacherUser}
+                onChange={(e) => setTeacherUser(e.target.value)}
+                className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={teacherPass}
+                onChange={(e) => setTeacherPass(e.target.value)}
+                className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer disabled:opacity-50"
+            >
+              <KeyRound className="w-4 h-4" />
+              <span>{isLoggingIn ? 'Authenticating...' : 'Sign In to Control Panel'}</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ================= AUTHENTICATED TEACHER DASHBOARD =================
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans selection:bg-purple-500 selection:text-white">
       {/* Top Header */}
@@ -429,11 +562,18 @@ export default function TeacherMasterDashboard() {
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Link href="/student" target="_blank" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300 transition flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          <Link href="/student" target="_blank" className="hidden sm:flex px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300 transition items-center gap-2">
             <span>Student View</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </Link>
+          <button
+            onClick={handleTeacherLogout}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-red-600 hover:text-white text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Logout</span>
+          </button>
         </div>
       </header>
 
@@ -450,7 +590,7 @@ export default function TeacherMasterDashboard() {
                 <div>
                   <h2 className="text-lg font-bold text-white">Zoom Account Credentials</h2>
                   <p className="text-xs text-slate-400 leading-relaxed mt-1">
-                    Zoom Server-to-Server OAuth හි Account ID, Client ID සහ Client Secret මෙහි Save කරන්න.
+                    Enter and save your Zoom Server-to-Server OAuth Account ID, Client ID, and Client Secret here.
                   </p>
                 </div>
               </div>
@@ -458,7 +598,7 @@ export default function TeacherMasterDashboard() {
               {isZoomConfigured && (
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                  <span>Zoom Account එක සාර්ථකව සම්බන්ධ වී ඇත!</span>
+                  <span>Zoom Account connected successfully!</span>
                 </div>
               )}
 
@@ -502,7 +642,7 @@ export default function TeacherMasterDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-black">Your Classes</h2>
-                <p className="text-xs text-slate-400">පන්තියක් තෝරා Zoom, සිසුන්, Recordings සහ Tutes කළමනාකරණය කරන්න.</p>
+                <p className="text-xs text-slate-400">Select a class to manage Zoom meetings, students, recordings, and tutes.</p>
               </div>
               <button
                 onClick={() => setShowCreateModal(true)}
@@ -514,11 +654,11 @@ export default function TeacherMasterDashboard() {
 
             {loading ? (
               <div className="p-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> පන්ති ලෝඩ් වෙමින් පවතී...
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading classes...
               </div>
             ) : courses.length === 0 ? (
               <div className="border border-dashed border-slate-800 rounded-3xl p-12 text-center text-slate-500 text-xs">
-                තවම පන්ති සාදා නැත. "Create New Class" ඔබන්න.
+                No classes created yet. Click "Create New Class" to get started.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -642,7 +782,7 @@ export default function TeacherMasterDashboard() {
                     className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/30 disabled:opacity-50"
                   >
                     {isCreatingMeeting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
-                    <span>{isCreatingMeeting ? 'Meeting එක සෑදෙමින් පවතී...' : 'Generate Zoom Meeting'}</span>
+                    <span>{isCreatingMeeting ? 'Creating Meeting...' : 'Generate Zoom Meeting'}</span>
                   </button>
                 </form>
 
@@ -668,7 +808,7 @@ export default function TeacherMasterDashboard() {
                             href={activeMeeting.start_url} target="_blank" rel="noreferrer"
                             className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
                           >
-                            <ExternalLink className="w-4 h-4" /> Start Class as Host (ගුරුතුමාට)
+                            <ExternalLink className="w-4 h-4" /> Start Class as Host
                           </a>
                           <button
                             onClick={handleCopyWhatsAppText}
@@ -680,7 +820,7 @@ export default function TeacherMasterDashboard() {
                       </div>
                     ) : (
                       <div className="mt-12 text-center text-slate-500 text-xs">
-                        <p>මෙම පන්තිය සඳහා තවම Zoom Meeting එකක් සාදා නැත.</p>
+                        <p>No Zoom meeting has been created for this class yet.</p>
                       </div>
                     )}
                   </div>
@@ -698,7 +838,7 @@ export default function TeacherMasterDashboard() {
                       <Plus className="w-4 h-4 text-purple-400" /> Enroll New Student
                     </h3>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      නම සහ WhatsApp අංකය ලබා දෙන්න. Username සහ Password Auto-Generate වේ.
+                      Enter the student's name and WhatsApp number. Username and password will be auto-generated.
                     </p>
 
                     <div>
@@ -720,7 +860,7 @@ export default function TeacherMasterDashboard() {
                     <div>
                       <label className="text-[11px] text-slate-400 font-semibold mb-1 block">Index Number (Optional)</label>
                       <input
-                        type="text" placeholder="හිස්ව තැබුවහොත් Auto-Generate වේ" value={studentIndex} onChange={(e) => setStudentIndex(e.target.value)}
+                        type="text" placeholder="Leave blank to auto-generate" value={studentIndex} onChange={(e) => setStudentIndex(e.target.value)}
                         className="w-full bg-[#070b14] border border-slate-700/60 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-600"
                       />
                     </div>
@@ -728,7 +868,7 @@ export default function TeacherMasterDashboard() {
                     <div>
                       <label className="text-[11px] text-slate-400 font-semibold mb-1 block">Custom Password (Optional)</label>
                       <input
-                        type="text" placeholder="හිස්ව තැබුවහොත් 6-digit PIN එකක් ලැබේ" value={studentCustomPass} onChange={(e) => setStudentCustomPass(e.target.value)}
+                        type="text" placeholder="Leave blank for a 6-digit PIN" value={studentCustomPass} onChange={(e) => setStudentCustomPass(e.target.value)}
                         className="w-full bg-[#070b14] border border-slate-700/60 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-600"
                       />
                     </div>
@@ -748,7 +888,7 @@ export default function TeacherMasterDashboard() {
                     </div>
 
                     {students.length === 0 ? (
-                      <p className="text-xs text-slate-500 py-8 text-center">තවම කිසිදු ශිෂ්‍යයෙක් ලියාපදිංචි කර නැත.</p>
+                      <p className="text-xs text-slate-500 py-8 text-center">No students enrolled yet.</p>
                     ) : (
                       <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
                         {students.map((st) => (
@@ -776,7 +916,7 @@ export default function TeacherMasterDashboard() {
                               {/* 1. VIEW STUDENT REPORT BUTTON */}
                               <button
                                 onClick={() => handleOpenStudentReport(st)}
-                                title="විභාග ලකුණු සහ පැමිණීමේ සම්පූර්ණ වාර්තාව බලන්න"
+                                title="View full exam marks and attendance report"
                                 className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-blue-600/30"
                               >
                                 <BarChart3 className="w-3.5 h-3.5" />
@@ -785,7 +925,7 @@ export default function TeacherMasterDashboard() {
 
                               <button
                                 onClick={() => handleCopyStudentLogin(st)}
-                                title="Login Details WhatsApp Message එක Copy කරගන්න"
+                                title="Copy login details WhatsApp message"
                                 className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
                               >
                                 <Copy className="w-3.5 h-3.5" />
@@ -794,7 +934,7 @@ export default function TeacherMasterDashboard() {
 
                               <button
                                 onClick={() => handleUnlockDevice(st.id)}
-                                title="Device reset කර ශිෂ්‍යයාට නව Device එකකින් ලොග් වීමට අවසර දෙන්න"
+                                title="Reset device lock to allow student to log in from a new device"
                                 className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
                               >
                                 <Unlock className="w-3.5 h-3.5" />
@@ -815,13 +955,13 @@ export default function TeacherMasterDashboard() {
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
                         <CreditCard className="w-4 h-4 text-emerald-400" /> Student Bank Slips & Payment Status
                       </h3>
-                      <p className="text-xs text-slate-400">සිසුන් එවූ බැංකු රිසිට්පත් පරීක්ෂා කර Approve හෝ Reject කරන්න.</p>
+                      <p className="text-xs text-slate-400">Review student bank slips and approve or reject payments.</p>
                     </div>
                     <span className="text-xs font-mono font-bold text-emerald-400">{slips.length} Slips Submitted</span>
                   </div>
 
                   {slips.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-6 text-center">තවම රිසිට්පත් කිසිවක් ලැබී නැත.</p>
+                    <p className="text-xs text-slate-500 py-6 text-center">No bank slips submitted yet.</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {slips.map((slp) => (
@@ -880,7 +1020,7 @@ export default function TeacherMasterDashboard() {
                     <PlaySquare className="w-5 h-5 text-red-400" />
                     <h3 className="font-bold text-sm text-white">Add Past Lesson Recording</h3>
                   </div>
-                  <p className="text-xs text-slate-400">පන්ති පාඩමේ YouTube Video Link එක හෝ Video ID එක මෙහි ඇතුළත් කරන්න.</p>
+                  <p className="text-xs text-slate-400">Enter the YouTube video link or video ID for the class lesson recording.</p>
 
                   <div className="space-y-3">
                     <div>
@@ -910,7 +1050,7 @@ export default function TeacherMasterDashboard() {
                   </h3>
 
                   {recordings.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-8 text-center">තවම කිසිදු Recording එකක් දමා නැත.</p>
+                    <p className="text-xs text-slate-500 py-8 text-center">No recordings added yet.</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {recordings.map((rec) => (
@@ -1029,7 +1169,7 @@ export default function TeacherMasterDashboard() {
 
             {loadingReport ? (
               <div className="py-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> ප්‍රතිඵල වාර්තාව සූදානම් වෙමින් පවතී...
+                <Loader2 className="w-4 h-4 animate-spin" /> Preparing performance report...
               </div>
             ) : (
               <div className="space-y-6">
@@ -1037,11 +1177,11 @@ export default function TeacherMasterDashboard() {
                 {/* 1. Quick Stats Cards */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">මුහුණ දුන් විභාග</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Exams Taken</span>
                     <h4 className="text-xl font-black text-white mt-1">{studentQuizResults.length}</h4>
                   </div>
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">ලබාගත් සාමාන්‍යය</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Average Score</span>
                     <h4 className="text-xl font-black text-emerald-400 mt-1">
                       {studentQuizResults.length > 0 
                         ? `${Math.round(studentQuizResults.reduce((a, b) => a + Number(b.score || 0), 0) / studentQuizResults.length)}%` 
@@ -1049,20 +1189,20 @@ export default function TeacherMasterDashboard() {
                     </h4>
                   </div>
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">සජීවී පැමිණීම (Live)</span>
-                    <h4 className="text-xl font-black text-blue-400 mt-1">{studentAttendanceLogs.length} දින</h4>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Live Attendance</span>
+                    <h4 className="text-xl font-black text-blue-400 mt-1">{studentAttendanceLogs.length} Days</h4>
                   </div>
                 </div>
 
                 {/* 2. Detailed Quiz Results Table */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" /> විභාග ලකුණු සහ ප්‍රතිඵල (Quiz Submissions)
+                    <Award className="w-4 h-4 text-amber-400" /> Exam Marks & Results (Quiz Submissions)
                   </h4>
 
                   {studentQuizResults.length === 0 ? (
                     <div className="p-6 rounded-2xl bg-[#070b14] border border-slate-800 text-center text-slate-500 text-xs">
-                      මෙම ශිෂ්‍යයා තවමත් කිසිදු විභාගයකට (Quiz) මුහුණ දී නැත.
+                      This student has not taken any quizzes yet.
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1071,13 +1211,13 @@ export default function TeacherMasterDashboard() {
                           <div>
                             <h5 className="font-bold text-xs text-white">{res.quizzes?.title || 'Online Exam'}</h5>
                             <span className="text-[10px] text-slate-500 font-mono">
-                              දිනය: {new Date(res.submitted_at).toLocaleDateString()} • වේලාව: {new Date(res.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              Date: {new Date(res.submitted_at).toLocaleDateString()} • Time: {new Date(res.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
                           
                           <div className="flex items-center gap-3">
                             <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
-                              ලකුණු: {res.score} / {res.quizzes?.total_marks || 100}
+                              Score: {res.score} / {res.quizzes?.total_marks || 100}
                             </span>
                           </div>
                         </div>
@@ -1089,12 +1229,12 @@ export default function TeacherMasterDashboard() {
                 {/* 3. Attendance Log */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-blue-400" /> Zoom පන්ති පැමිණීමේ ඉතිහාසය (Attendance Logs)
+                    <Calendar className="w-4 h-4 text-blue-400" /> Zoom Class Attendance History (Attendance Logs)
                   </h4>
 
                   {studentAttendanceLogs.length === 0 ? (
                     <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 text-center text-slate-500 text-xs">
-                      පැමිණීමේ සටහන් කිසිවක් නැත.
+                      No attendance records found.
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

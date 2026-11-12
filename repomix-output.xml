@@ -1,0 +1,2428 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+app/
+  api/
+    zoom/
+      route.ts
+  student/
+    page.tsx
+  teacher/
+    page.tsx
+  favicon.ico
+  globals.css
+  layout.tsx
+  page.tsx
+lib/
+  supabase.ts
+public/
+  file.svg
+  globe.svg
+  next.svg
+  vercel.svg
+  window.svg
+.gitignore
+AGENTS.md
+eslint.config.mjs
+next.config.ts
+package.json
+README.md
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/api/zoom/route.ts">
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+
+export async function POST(req: Request) {
+  try {
+    const { topic, duration, courseId } = await req.json();
+
+    // 1. Database එකෙන් Zoom Credentials ලබා ගැනීම
+    const { data: creds } = await supabase
+      .from('zoom_settings')
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!creds || !creds.account_id || !creds.client_id || !creds.client_secret) {
+      return NextResponse.json({
+        error: 'Zoom Credentials හමුවූයේ නැත. කරුණාකර "Zoom Account" ටැබ් එකට ගොස් ඔබගේ Account ID, Client ID සහ Client Secret ඇතුළත් කර Save කරන්න.'
+      }, { status: 400 });
+    }
+
+    const { account_id, client_id, client_secret } = creds;
+
+    // 2. Zoom OAuth Token ලබා ගැනීම
+    const authHeader = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
+    const tokenRes = await fetch(
+      `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${account_id}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Basic ${authHeader}` },
+      }
+    );
+
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok) {
+      return NextResponse.json({
+        error: `Zoom සම්බන්ධතාවය අසාර්ථක විය: ${tokenData.message || tokenData.error || 'Invalid credentials'}`
+      }, { status: 400 });
+    }
+
+    const accessToken = tokenData.access_token;
+
+    // 3. Zoom Live Meeting එකක් Create කිරීම
+    const meetingRes = await fetch('https://api.zoom.us/v2/users/me/meetings', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        topic: topic || 'Live Class Session',
+        type: 2,
+        duration: Number(duration) || 120,
+        settings: {
+          host_video: true,
+          participant_video: true,
+          join_before_host: false,
+          mute_upon_entry: true,
+          waiting_room: false,
+        },
+      }),
+    });
+
+    const meetingData = await meetingRes.json();
+    if (!meetingRes.ok) {
+      return NextResponse.json({
+        error: `Meeting සාදාගැනීම අසාර්ථක විය: ${meetingData.message || 'Error creating meeting'}`
+      }, { status: 400 });
+    }
+
+    // 4. Meeting එක Database එකට Save කර Course Zoom Link update කිරීම
+    if (courseId) {
+      await supabase.from('zoom_meetings').insert([{
+        course_id: courseId,
+        topic: topic || 'Live Class Session',
+        duration_minutes: Number(duration) || 120,
+        meeting_id: meetingData.id?.toString(),
+        password: meetingData.password || '',
+        join_url: meetingData.join_url,
+        start_url: meetingData.start_url
+      }]);
+
+      await supabase.from('courses').update({ zoom_link: meetingData.join_url }).eq('id', courseId);
+    }
+
+    return NextResponse.json({
+      success: true,
+      meetingId: meetingData.id?.toString(),
+      password: meetingData.password || '',
+      joinUrl: meetingData.join_url,
+      startUrl: meetingData.start_url,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/globals.css">
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+</file>
+
+<file path="app/layout.tsx">
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Create Next App",
+  description: "Generated by create next app",
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col">{children}</body>
+    </html>
+  );
+}
+</file>
+
+<file path="lib/supabase.ts">
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+</file>
+
+<file path="public/file.svg">
+<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
+</file>
+
+<file path="public/globe.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
+</file>
+
+<file path="public/next.svg">
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
+</file>
+
+<file path="public/vercel.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+</file>
+
+<file path="public/window.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+</file>
+
+<file path="AGENTS.md">
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+</file>
+
+<file path="eslint.config.mjs">
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+]);
+
+export default eslintConfig;
+</file>
+
+<file path="next.config.ts">
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+  cacheComponents: true,
+  partialPrefetching: true,
+  turbopack: {
+    rules: {
+      "*.css": {
+        loaders: ["@tailwindcss/turbopack"],
+        as: "*.css",
+      },
+    },
+  },
+};
+
+export default nextConfig;
+</file>
+
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Getting Started
+
+First, run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": ["node_modules"]
+}
+</file>
+
+<file path="app/student/page.tsx">
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+import { 
+  GraduationCap, Video, BookOpen, Clock, 
+  HelpCircle, CheckCircle2, XCircle, Award, 
+  ArrowLeft, Download, ShieldCheck, PlaySquare, 
+  Lock, X, CreditCard, AlertCircle, LogOut, KeyRound, Smartphone
+} from 'lucide-react';
+
+export default function StudentPortal() {
+  const [studentInfo, setStudentInfo] = useState<any | null>(null);
+  const [currentCourse, setCurrentCourse] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Login Form States
+  const [loginIdentifier, setLoginIdentifier] = useState(''); // Index No or Phone
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Course Dynamic Data
+  const [activeMeeting, setActiveMeeting] = useState<any | null>(null);
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [recordings, setRecordings] = useState<any[]>([]);
+  const [activeQuiz, setActiveQuiz] = useState<any | null>(null);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [attendanceMarked, setAttendanceMarked] = useState(false);
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+
+  // Bank Slip
+  const [slipUrl, setSlipUrl] = useState('');
+  const [slipStatus, setSlipStatus] = useState<string | null>(null);
+  const [isUploadingSlip, setIsUploadingSlip] = useState(false);
+
+  // Quiz States
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
+
+  useEffect(() => {
+    // Check local session
+    const savedStudent = localStorage.getItem('lms_student_session');
+    if (savedStudent) {
+      const parsed = JSON.parse(savedStudent);
+      verifyAndLoadStudent(parsed.id);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  // Browser Device Token
+  const getDeviceFingerprint = () => {
+    let dId = localStorage.getItem('lms_device_token');
+    if (!dId) {
+      dId = 'DEV-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now().toString(36);
+      localStorage.setItem('lms_device_token', dId);
+    }
+    return dId;
+  };
+
+  // Student Login Handler with 1-Device Lock
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoggingIn(true);
+
+    try {
+      // Index No හෝ Phone Number එකෙන් Student සෙවීම
+      const { data: stu, error } = await supabase
+        .from('students')
+        .select('*')
+        .or(`index_number.eq.${loginIdentifier.trim()},whatsapp_number.eq.${loginIdentifier.trim()}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !stu) {
+        setLoginError('ඇතුළත් කළ Index අංකය හෝ දුරකථන අංකය වැරදිය.');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      // Password Verification (default '123456' or student phone)
+      const validPassword = stu.password || stu.whatsapp_number || '123456';
+      if (loginPassword.trim() !== validPassword) {
+        setLoginError('මුරපදය (Password) වැරදිය.');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      // 1-Device Lock Verification
+      const currentDeviceId = getDeviceFingerprint();
+
+      if (!stu.device_id) {
+        // පළමු වරට ලොග් වන Device එක Lock කරගැනීම
+        await supabase.from('students').update({ device_id: currentDeviceId }).eq('id', stu.id);
+      } else if (stu.device_id !== currentDeviceId) {
+        setLoginError('⚠️ ඔබගේ ගිණුම දැනටමත් වෙනත් Phone එකකට හෝ පරිගණකයකට සම්බන්ධ කර ඇත. නව Device එකකින් Login වීමට ගුරුතුමා අමතා Device Unlock කරවා ගන්න.');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      // Save Session
+      localStorage.setItem('lms_student_session', JSON.stringify(stu));
+      await verifyAndLoadStudent(stu.id);
+    } catch (err: any) {
+      setLoginError('Login දෝෂයක්: ' + err.message);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('lms_student_session');
+    setStudentInfo(null);
+    setCurrentCourse(null);
+  };
+
+  const verifyAndLoadStudent = async (studentId: string) => {
+    setLoading(true);
+    const { data: stu } = await supabase.from('students').select('*').eq('id', studentId).maybeSingle();
+    if (!stu) {
+      handleLogout();
+      setLoading(false);
+      return;
+    }
+
+    setStudentInfo({
+      id: stu.id,
+      name: stu.full_name,
+      indexNo: stu.index_number,
+      phone: stu.whatsapp_number
+    });
+
+    // Enrolled Class එක සොයා ගැනීම
+    const { data: enrollments } = await supabase
+      .from('enrollments')
+      .select('course_id, courses(*)')
+      .eq('student_id', stu.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (enrollments && enrollments.courses) {
+      const course = enrollments.courses as any;
+      setCurrentCourse(course);
+
+      // Active Zoom Meeting
+      const { data: mtg } = await supabase
+        .from('zoom_meetings')
+        .select('*')
+        .eq('course_id', course.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setActiveMeeting(mtg);
+
+      // Materials, Recordings, Quizzes, Slips
+      const { data: mat } = await supabase.from('materials').select('*').eq('course_id', course.id);
+      const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', course.id);
+      const { data: rec } = await supabase.from('recordings').select('*').eq('course_id', course.id);
+      const { data: slp } = await supabase.from('slips').select('*').eq('student_id', stu.id).eq('course_id', course.id).order('submitted_at', { ascending: false }).limit(1);
+
+      if (mat) setMaterials(mat);
+      if (qz) setQuizzes(qz);
+      if (rec) setRecordings(rec);
+      if (slp && slp.length > 0) setSlipStatus(slp[0].status);
+    }
+
+    setLoading(false);
+  };
+
+  const handleJoinClass = async () => {
+    const zoomLink = activeMeeting?.join_url || currentCourse?.zoom_link;
+    if (!zoomLink) {
+      alert('මෙම පන්තිය සඳහා Zoom Meeting එකක් තවම ආරම්භ කර නැත.');
+      return;
+    }
+
+    // Attendance Mark කිරීම
+    if (studentInfo && currentCourse) {
+      await supabase.from('attendance').insert([{
+        student_id: studentInfo.id,
+        course_id: currentCourse.id,
+        duration_minutes: activeMeeting?.duration_minutes || 120,
+        status: 'Present'
+      }]);
+      setAttendanceMarked(true);
+    }
+
+    window.open(zoomLink, '_blank');
+  };
+
+  const handleUploadSlip = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!slipUrl || !currentCourse || !studentInfo) return;
+    setIsUploadingSlip(true);
+    const { error } = await supabase.from('slips').insert([
+      { student_id: studentInfo.id, course_id: currentCourse.id, slip_url: slipUrl, status: 'Pending' }
+    ]);
+    if (!error) {
+      setSlipStatus('Pending');
+      setSlipUrl('');
+      alert('ඔබගේ බැංකු රිසිට්පත සාර්ථකව යොමු කෙරිණි.');
+    }
+    setIsUploadingSlip(false);
+  };
+
+  const handleStartQuiz = async (quiz: any) => {
+    const { data: qData } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quiz.id);
+    if (qData && qData.length > 0) {
+      setQuestions(qData);
+      setActiveQuiz(quiz);
+      setTimeLeft(quiz.duration_minutes * 60);
+      setSelectedAnswers({});
+      setQuizSubmitted(false);
+      setScore(0);
+    } else {
+      alert('මෙම විභාගය සඳහා ප්‍රශ්න තවම ඇතුළත් කර නොමැත.');
+    }
+  };
+
+  useEffect(() => {
+    if (!activeQuiz || quizSubmitted || timeLeft <= 0) return;
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleSubmitQuiz();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [activeQuiz, quizSubmitted, timeLeft]);
+
+  const handleSubmitQuiz = async () => {
+    let earnedMarks = 0;
+    questions.forEach((q, idx) => {
+      if (selectedAnswers[idx] === q.correct_option) earnedMarks += q.marks || 10;
+    });
+    setScore(earnedMarks);
+    setQuizSubmitted(true);
+    if (activeQuiz && studentInfo) {
+      await supabase.from('quiz_submissions').insert([{
+        quiz_id: activeQuiz.id,
+        student_id: studentInfo.id,
+        score: earnedMarks,
+        total_questions: questions.length,
+        answers: selectedAnswers
+      }]);
+    }
+  };
+
+  const formatTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainder = secs % 60;
+    return `${mins.toString().padStart(2, '0')}:${remainder.toString().padStart(2, '0')}`;
+  };
+
+  // ================= VIEW 1: LOGIN SCREEN =================
+  if (!studentInfo && !loading) {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col justify-center items-center p-6 text-white font-sans selection:bg-purple-500 selection:text-white">
+        <div className="w-full max-w-md bg-[#0c1322] border border-slate-800/90 rounded-3xl p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center mx-auto shadow-lg shadow-purple-600/30">
+              <GraduationCap className="w-7 h-7 text-white" />
+            </div>
+            <h2 className="text-xl font-black text-white">Student Portal Login</h2>
+            <p className="text-xs text-slate-400">ඔබගේ පන්තියේ අධ්‍යයන කටයුතු සඳහා පිවිසෙන්න</p>
+          </div>
+
+          {loginError && (
+            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Index Number හෝ WhatsApp අංකය</label>
+              <input
+                type="text"
+                placeholder="උදා: ST-001 හෝ 0771234567"
+                value={loginIdentifier}
+                onChange={(e) => setLoginIdentifier(e.target.value)}
+                className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">මුරපදය (Password)</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
+                required
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">* මුරපදය නොදන්නේ නම් ඔබගේ WhatsApp දුරකථන අංකය ලබා දෙන්න.</span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer disabled:opacity-50"
+            >
+              <KeyRound className="w-4 h-4" />
+              <span>{isLoggingIn ? 'සත්‍යාපනය වෙමින්...' : 'Login to Student Hub'}</span>
+            </button>
+          </form>
+
+          <div className="pt-2 text-center border-t border-slate-800">
+            <span className="text-[11px] text-slate-500 flex items-center justify-center gap-1">
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Single Device Security සක්‍රියයි
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ================= VIEW 2: LOADING SCREEN =================
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center text-slate-400 space-y-3">
+        <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs font-mono">ශිෂ්‍ය ගිණුම පරීක්ෂා වෙමින් පවතී...</p>
+      </div>
+    );
+  }
+
+  // ================= VIEW 3: STUDENT DASHBOARD =================
+  return (
+    <div className="min-h-screen bg-[#070b14] text-white font-sans selection:bg-purple-500 selection:text-white pb-12">
+      {/* Top Header */}
+      <header className="border-b border-slate-800/80 px-6 py-4 bg-[#0c1322] sticky top-0 z-30 flex items-center justify-between shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center font-bold">
+            <GraduationCap className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-sm">{studentInfo?.name}</h1>
+            <span className="text-[11px] font-mono text-purple-400">ID: {studentInfo?.indexNo}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs">
+            <Lock className="w-3.5 h-3.5" /> 1 Device Verified
+          </span>
+          <button
+            onClick={handleLogout}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-red-600 hover:text-white text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Logout</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto p-6 space-y-6">
+
+        {!currentCourse ? (
+          <div className="p-8 text-center bg-[#0c1322] border border-slate-800 rounded-3xl space-y-3">
+            <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
+            <h3 className="font-bold text-base text-white">ඔබ තවමත් කිසිදු පන්තියකට Enroll කර නොමැත.</h3>
+            <p className="text-xs text-slate-400">කරුණාකර ගුරුතුමා අමතා ඔබගේ Index අංකය පන්තියට ලියාපදිංචි කරවා ගන්න.</p>
+          </div>
+        ) : (
+          <>
+            {/* PAYMENT STATUS & SLIP BANNER */}
+            <div className={`p-1 rounded-2xl border bg-gradient-to-r ${
+              slipStatus === 'Approved' ? 'from-emerald-900/40 to-teal-900/20 border-emerald-500/30' : 
+              slipStatus === 'Pending' ? 'from-amber-900/40 to-yellow-900/20 border-amber-500/30' : 
+              'from-purple-900/40 to-pink-900/20 border-purple-500/30'
+            }`}>
+              <div className="bg-[#0c1322] rounded-xl p-5 md:p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className={`w-5 h-5 ${slipStatus === 'Approved' ? 'text-emerald-400' : 'text-purple-400'}`} />
+                    <h3 className="font-bold text-sm text-white">{currentCourse.title} - පන්ති ගාස්තු</h3>
+                  </div>
+                  
+                  {slipStatus === 'Approved' ? (
+                    <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" /> ගෙවීම් තහවුරු කර ඇත. සියලු පාඩම් සඳහා ප්‍රවේශය හිමිව ඇත.
+                    </div>
+                  ) : slipStatus === 'Pending' ? (
+                    <div className="text-xs text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 inline-flex items-center gap-1.5">
+                      <Clock className="w-4 h-4" /> බැංකු රිසිට්පත යොමු කර ඇත (Pending). ගුරුතුමා අනුමත කරන තෙක් රැඳී සිටින්න.
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-300">
+                      මාසික ගාස්තුව: <strong className="text-emerald-400 font-mono text-sm">Rs. {currentCourse.monthly_fee}/-</strong> කි. පහතින් Bank Slip එකක් Upload කරන්න.
+                    </div>
+                  )}
+                </div>
+
+                {slipStatus !== 'Approved' && (
+                  <form onSubmit={handleUploadSlip} className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <input
+                      type="url"
+                      placeholder="Bank Slip URL / Drive Link..."
+                      value={slipUrl}
+                      onChange={(e) => setSlipUrl(e.target.value)}
+                      className="flex-1 min-w-[240px] bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={isUploadingSlip || slipStatus === 'Pending'}
+                      className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer"
+                    >
+                      Submit Slip
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+
+            {/* LIVE ZOOM CLASS SECTION */}
+            <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
+                    {currentCourse.grade} • {currentCourse.class_type}
+                  </span>
+                  <h2 className="text-lg font-bold text-white">
+                    {activeMeeting ? activeMeeting.topic : currentCourse.title}
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    {activeMeeting 
+                      ? `නියමිත කාලය: විනාඩි ${activeMeeting.duration_minutes} කි. Join Class ඔබා සජීවීව සම්බන්ධ වී Attendance ලකුණු කරගන්න.`
+                      : 'Zoom Session එක සූදානම් කර ඇති විට Join Class ඔබා සම්බන්ධ විය හැක.'}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                  <Video className="w-5 h-5" />
+                </div>
+              </div>
+
+              {activeMeeting && (
+                <div className="flex items-center gap-4 text-xs font-mono text-slate-400 bg-[#070b14] p-3 rounded-xl border border-slate-800/60 w-fit">
+                  <span>Meeting ID: <strong className="text-white">{activeMeeting.meeting_id || 'Direct'}</strong></span>
+                  <span>Passcode: <strong className="text-emerald-400">{activeMeeting.password || 'None'}</strong></span>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  onClick={handleJoinClass}
+                  disabled={!activeMeeting?.join_url && !currentCourse.zoom_link}
+                  className={`px-6 py-3 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg transition ${
+                    activeMeeting?.join_url || currentCourse.zoom_link 
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30 cursor-pointer' 
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  <Video className="w-4 h-4" />
+                  <span>Join Live Class (Attendance සටහන් වේ)</span>
+                </button>
+                {attendanceMarked && (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-3 py-2 rounded-xl border border-emerald-500/20">
+                    <CheckCircle2 className="w-4 h-4" /> Attendance සටහන් විය!
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* RECORDINGS, TUTES, QUIZZES */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Recordings */}
+              <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
+                <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                  <PlaySquare className="w-4 h-4 text-red-400" /> Past Recordings ({recordings.length})
+                </h3>
+                {recordings.length === 0 ? (
+                  <p className="text-xs text-slate-500">Recordings නැත.</p>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto">
+                    {recordings.map((rec) => (
+                      <div key={rec.id} className="p-3.5 rounded-2xl bg-[#131c31] border border-slate-700/50">
+                        <h4 className="font-bold text-xs text-white line-clamp-1 mb-2">{rec.title}</h4>
+                        <button
+                          onClick={() => setActiveVideoId(rec.youtube_video_id)}
+                          className="w-full py-2 rounded-xl bg-red-600/10 hover:bg-red-600 hover:text-white text-red-400 text-xs font-semibold transition cursor-pointer"
+                        >
+                          Watch Lesson
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Tutes */}
+              <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
+                <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-emerald-400" /> Tutes & Handouts ({materials.length})
+                </h3>
+                {materials.length === 0 ? (
+                  <p className="text-xs text-slate-500">Tutes Upload කර නැත.</p>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto">
+                    {materials.map((m) => (
+                      <div key={m.id} className="p-3.5 rounded-2xl bg-[#131c31] border border-slate-700/50 flex items-center justify-between">
+                        <h4 className="font-bold text-xs text-white line-clamp-1 pr-2">{m.title}</h4>
+                        <a href={m.file_url} target="_blank" rel="noreferrer" className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white transition">
+                          <Download className="w-4 h-4" />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Quizzes */}
+              <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
+                <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-amber-400" /> Quizzes & Papers
+                </h3>
+                {quizzes.length === 0 ? (
+                  <p className="text-xs text-slate-500">Quizzes සකසා නැත.</p>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto">
+                    {quizzes.map((q) => (
+                      <div key={q.id} className="p-3.5 rounded-2xl bg-[#131c31] border border-slate-700/50 space-y-2">
+                        <h4 className="font-bold text-xs text-white line-clamp-1">{q.title}</h4>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400 font-mono">{q.duration_minutes} Mins</span>
+                          <button
+                            onClick={() => handleStartQuiz(q)}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-900 text-[11px] font-bold transition cursor-pointer"
+                          >
+                            Start Exam
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </main>
+
+      {/* VIDEO MODAL */}
+      {activeVideoId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl p-4">
+            <div className="flex items-center justify-between px-2 mb-4">
+              <span className="font-bold text-sm text-red-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4" /> Protected Lesson Stream
+              </span>
+              <button onClick={() => setActiveVideoId(null)} className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="relative pt-[56.25%] rounded-2xl overflow-hidden bg-black border border-slate-800">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${activeVideoId}?rel=0&modestbranding=1`}
+                className="absolute inset-0 w-full h-full border-none"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUIZ MODAL */}
+      {activeQuiz && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-[#0c1322] border border-slate-800 text-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative">
+            {activeQuiz.enable_watermark && (
+              <div className="pointer-events-none select-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden opacity-[0.06] rotate-[-25deg]">
+                <div className="text-center font-mono font-black text-xl text-white space-y-6">
+                  <p>{studentInfo?.name} • {studentInfo?.phone}</p>
+                  <p>{studentInfo?.indexNo} • {currentCourse?.title}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="sticky top-0 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800/80 px-6 py-4 flex items-center justify-between z-30">
+              <div>
+                <h3 className="font-bold text-sm text-white">{activeQuiz.title}</h3>
+                <span className="text-[10px] text-slate-400">ප්‍රශ්න {questions.length} කි</span>
+              </div>
+
+              {!quizSubmitted && (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-400 font-mono font-bold text-sm">
+                  <Clock className="w-4 h-4 animate-pulse" />
+                  <span>{formatTime(timeLeft)}</span>
+                </div>
+              )}
+
+              {quizSubmitted && (
+                <button onClick={() => setActiveQuiz(null)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer">
+                  Close Exam
+                </button>
+              )}
+            </div>
+
+            <div className="p-6 space-y-6 relative z-10">
+              {quizSubmitted && (
+                <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/40 p-6 rounded-2xl text-center space-y-2">
+                  <Award className="w-12 h-12 text-yellow-400 mx-auto" />
+                  <h4 className="text-lg font-bold text-white">ප්‍රශ්නාවලිය අවසන්!</h4>
+                  <p className="text-3xl font-black text-purple-300">
+                    ලකුණු: {score} / {questions.reduce((a, b) => a + (b.marks || 10), 0)}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {questions.map((q, qIdx) => {
+                  const studentAns = selectedAnswers[qIdx];
+                  const isCorrect = studentAns === q.correct_option;
+
+                  return (
+                    <div key={q.id} className="bg-[#070b14] border border-slate-800/80 p-5 rounded-2xl space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <h5 className="font-semibold text-sm text-slate-200">{qIdx + 1}. {q.question_text}</h5>
+                        {quizSubmitted && (
+                          isCorrect ? (
+                            <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                              <CheckCircle2 className="w-3 h-3" /> නිවැරදියි
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-[10px] text-red-400 font-bold bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20">
+                              <XCircle className="w-3 h-3" /> වැරදියි
+                            </span>
+                          )
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        {q.options.map((opt: string, optIdx: number) => {
+                          let optStyle = "border-slate-700 bg-[#0c1322] text-slate-300 hover:border-purple-500/50 cursor-pointer";
+                          if (!quizSubmitted) {
+                            if (studentAns === optIdx) optStyle = "border-purple-500 bg-purple-500/20 text-white font-bold";
+                          } else {
+                            if (optIdx === q.correct_option) optStyle = "border-emerald-500 bg-emerald-500/20 text-emerald-300 font-bold";
+                            else if (studentAns === optIdx && !isCorrect) optStyle = "border-red-500 bg-red-500/20 text-red-300 line-through";
+                          }
+
+                          return (
+                            <button
+                              key={optIdx}
+                              disabled={quizSubmitted}
+                              onClick={() => setSelectedAnswers(prev => ({ ...prev, [qIdx]: optIdx }))}
+                              className={`w-full text-left p-3.5 rounded-xl border text-xs transition ${optStyle}`}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {!quizSubmitted && (
+                <button
+                  onClick={handleSubmitQuiz}
+                  className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition shadow-lg shadow-purple-600/30 cursor-pointer"
+                >
+                  පිළිතුරු Submit කරන්න
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="app/page.tsx">
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+import { GraduationCap, ShieldCheck, Video, HelpCircle, Award, Users, ArrowRight } from 'lucide-react';
+
+export default function HomePage() {
+  return (
+    <div className="min-h-screen bg-[#070b14] text-white flex flex-col justify-between selection:bg-purple-500 selection:text-white font-sans">
+      
+      {/* Top Navbar */}
+      <header className="border-b border-slate-800/80 px-6 py-4 bg-[#0c1322] flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center font-bold">
+            <GraduationCap className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-sm tracking-tight text-white">Smart Tuition LMS</h1>
+            <span className="text-[10px] text-purple-400 uppercase tracking-widest font-semibold">Teacher Custom Build</span>
+          </div>
+        </div>
+
+        <span className="text-[11px] font-mono px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300">
+          Live Interactive Demo
+        </span>
+      </header>
+
+      {/* Hero Section */}
+      <main className="max-w-4xl mx-auto px-6 py-12 text-center space-y-8">
+        
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold">
+          <ShieldCheck className="w-4 h-4 text-purple-400" />
+          <span>Attendance • Timed Exams • Tutes • Progress Reports</span>
+        </div>
+
+        <div className="space-y-3">
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+            උපකාරක පන්ති කළමනාකරණය <br />
+            <span className="bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+              Smart තාක්ෂණයෙන් එකම තැනකින්
+            </span>
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
+            පැමිණීම සටහන් කිරීම, Countdown Timer සහිත Online විභාග, PDF නිබන්ධන බෙදාහැරීම සහ 1-Click නිල ප්‍රගති වාර්තා සමඟ නවීනතම LMS පද්ධතිය.
+          </p>
+        </div>
+
+        {/* 2 Quick Demo Action Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto pt-4 text-left">
+          
+          {/* Card 1: Teacher Control Panel */}
+          <Link
+            href="/teacher"
+            className="group p-6 rounded-3xl bg-[#0c1322] border border-slate-800 hover:border-purple-500/50 hover:bg-gradient-to-br hover:from-purple-950/20 hover:to-[#0c1322] transition-all duration-300 space-y-4 shadow-xl"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center group-hover:scale-110 transition">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <span>Teacher Admin Panel</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition text-purple-400" />
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                පැමිණීම බැලීම, අලුත් Tutes & Quizzes දැමීම සහ ශිෂ්‍ය Progress Report එක PDF ලෙස ලබාගැනීම.
+              </p>
+            </div>
+            <span className="inline-block text-[11px] font-bold text-purple-400 group-hover:underline">
+              Control Panel එකට පිවිසෙන්න →
+            </span>
+          </Link>
+
+          {/* Card 2: Student Portal */}
+          <Link
+            href="/student"
+            className="group p-6 rounded-3xl bg-[#0c1322] border border-slate-800 hover:border-indigo-500/50 hover:bg-gradient-to-br hover:from-indigo-950/20 hover:to-[#0c1322] transition-all duration-300 space-y-4 shadow-xl"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-110 transition">
+              <HelpCircle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <span>Demo Student Portal</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition text-indigo-400" />
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                1-Click Zoom Class, Tute බාගත කිරීම සහ Timer එක සහිත සජීවී Online Quiz එක පරීක්ෂා කිරීම.
+              </p>
+            </div>
+            <span className="inline-block text-[11px] font-bold text-indigo-400 group-hover:underline">
+              ශිෂ්‍ය ගිණුමට පිවිසෙන්න →
+            </span>
+          </Link>
+
+        </div>
+
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800/80 px-6 py-4 text-center text-xs text-slate-500 bg-[#0c1322]">
+        Smart Tuition LMS Platform • Powered by Next.js & Supabase
+      </footer>
+
+    </div>
+  );
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "teacher-custom-lms",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "canvas-confetti": "^1.9.4",
+    "lucide-react": "^1.68.0",
+    "next": "16.4.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.5",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
+</file>
+
+<file path="app/teacher/page.tsx">
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+import { 
+  Users, BookOpen, Video, HelpCircle, Plus, 
+  Settings, CheckCircle2, XCircle, ExternalLink, 
+  GraduationCap, ArrowLeft, Loader2, KeyRound, 
+  Radio, Share2, Layers, AlertCircle, Smartphone, 
+  Unlock, CreditCard, PlaySquare, FileText, Trash2,
+  Copy, Key, BarChart3, Award, Calendar, X
+} from 'lucide-react';
+
+export default function TeacherMasterDashboard() {
+  const [mainView, setMainView] = useState<'classes' | 'zoom_config'>('classes');
+  const [courses, setCourses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Zoom Credentials State
+  const [zoomAccountId, setZoomAccountId] = useState('');
+  const [zoomClientId, setZoomClientId] = useState('');
+  const [zoomClientSecret, setZoomClientSecret] = useState('');
+  const [isZoomConfigured, setIsZoomConfigured] = useState(false);
+  const [isSavingZoom, setIsSavingZoom] = useState(false);
+
+  // Create Course Modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newGrade, setNewGrade] = useState('');
+  const [newType, setNewType] = useState('Theory');
+  const [newFee, setNewFee] = useState('');
+  const [isSubmittingCourse, setIsSubmittingCourse] = useState(false);
+
+  // Selected Course Management State
+  const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
+  const [activeTab, setActiveTab] = useState<'zoom' | 'students' | 'recordings' | 'content' | 'quizzes'>('zoom');
+
+  // Student Performance Report Modal States
+  const [selectedStudentForReport, setSelectedStudentForReport] = useState<any | null>(null);
+  const [studentQuizResults, setStudentQuizResults] = useState<any[]>([]);
+  const [studentAttendanceLogs, setStudentAttendanceLogs] = useState<any[]>([]);
+  const [loadingReport, setLoadingReport] = useState(false);
+
+  // Zoom Meeting Creator inside Course Hub
+  const [meetingTopic, setMeetingTopic] = useState('');
+  const [meetingDuration, setMeetingDuration] = useState('120');
+  const [isCreatingMeeting, setIsCreatingMeeting] = useState(false);
+  const [activeMeeting, setActiveMeeting] = useState<any | null>(null);
+
+  // Course Specific Data
+  const [students, setStudents] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [recordings, setRecordings] = useState<any[]>([]);
+  const [slips, setSlips] = useState<any[]>([]);
+
+  // Sub Forms
+  const [studentName, setStudentName] = useState('');
+  const [studentPhone, setStudentPhone] = useState('');
+  const [studentIndex, setStudentIndex] = useState('');
+  const [studentCustomPass, setStudentCustomPass] = useState('');
+
+  const [materialTitle, setMaterialTitle] = useState('');
+  const [materialUrl, setMaterialUrl] = useState('');
+  const [recordingTitle, setRecordingTitle] = useState('');
+  const [recordingId, setRecordingId] = useState('');
+  const [quizTitle, setQuizTitle] = useState('');
+  const [quizDuration, setQuizDuration] = useState('20');
+  const [qText, setQText] = useState('');
+  const [opt0, setOpt0] = useState('');
+  const [opt1, setOpt1] = useState('');
+  const [correctOpt, setCorrectOpt] = useState('0');
+
+  useEffect(() => {
+    fetchCourses();
+    fetchZoomSettings();
+  }, []);
+
+  const fetchCourses = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
+    if (data) setCourses(data);
+    setLoading(false);
+  };
+
+  const fetchZoomSettings = async () => {
+    const { data } = await supabase.from('zoom_settings').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle();
+    if (data && data.account_id && data.client_id) {
+      setZoomAccountId(data.account_id);
+      setZoomClientId(data.client_id);
+      setZoomClientSecret(data.client_secret);
+      setIsZoomConfigured(true);
+    }
+  };
+
+  const handleSaveZoomSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingZoom(true);
+
+    const { data: existing } = await supabase.from('zoom_settings').select('id').limit(1).maybeSingle();
+
+    let err;
+    if (existing) {
+      const res = await supabase.from('zoom_settings').update({
+        account_id: zoomAccountId.trim(),
+        client_id: zoomClientId.trim(),
+        client_secret: zoomClientSecret.trim(),
+        updated_at: new Date().toISOString()
+      }).eq('id', existing.id);
+      err = res.error;
+    } else {
+      const res = await supabase.from('zoom_settings').insert([{
+        account_id: zoomAccountId.trim(),
+        client_id: zoomClientId.trim(),
+        client_secret: zoomClientSecret.trim()
+      }]);
+      err = res.error;
+    }
+
+    if (!err) {
+      setIsZoomConfigured(true);
+      alert('Zoom API Credentials සාර්ථකව සුරැකිණි!');
+      setMainView('classes');
+    } else {
+      alert('Error: ' + err.message);
+    }
+    setIsSavingZoom(false);
+  };
+
+  const handleCreateCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+    setIsSubmittingCourse(true);
+    const { error } = await supabase.from('courses').insert([{
+      title: newTitle.trim(),
+      grade: newGrade.trim() || 'Grade 10',
+      class_type: newType.trim() || 'Theory',
+      monthly_fee: Number(newFee) || 2500
+    }]);
+
+    if (!error) {
+      alert('පන්තිය සාර්ථකව නිර්මාණය විය!');
+      setShowCreateModal(false);
+      setNewTitle('');
+      fetchCourses();
+    }
+    setIsSubmittingCourse(false);
+  };
+
+  const openCourseManager = async (course: any) => {
+    setSelectedCourse(course);
+    setMeetingTopic(course.title + ' - Live Class');
+    await loadCourseDetails(course.id);
+  };
+
+  const loadCourseDetails = async (courseId: string) => {
+    const { data: mtg } = await supabase.from('zoom_meetings').select('*').eq('course_id', courseId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    setActiveMeeting(mtg || null);
+
+    const { data: enr } = await supabase.from('enrollments').select('student_id, is_active, students(*)').eq('course_id', courseId);
+    if (enr) setStudents(enr.map(e => ({ ...e.students, is_active: e.is_active })));
+
+    const { data: mat } = await supabase.from('materials').select('*').eq('course_id', courseId).order('created_at', { ascending: false });
+    if (mat) setMaterials(mat);
+
+    const { data: rec } = await supabase.from('recordings').select('*').eq('course_id', courseId).order('uploaded_at', { ascending: false });
+    if (rec) setRecordings(rec);
+
+    const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', courseId);
+    if (qz) setQuizzes(qz);
+
+    const { data: slp } = await supabase.from('slips').select('*, students(full_name, index_number, whatsapp_number)').eq('course_id', courseId).order('submitted_at', { ascending: false });
+    if (slp) setSlips(slp);
+  };
+
+  // Student Performance Report Viewer Logic
+  const handleOpenStudentReport = async (student: any) => {
+    setSelectedStudentForReport(student);
+    setLoadingReport(true);
+
+    try {
+      // 1. Fetch Quiz Submissions with Quiz Details
+      const { data: qSubs } = await supabase
+        .from('quiz_submissions')
+        .select('*, quizzes(title, duration_minutes, total_marks)')
+        .eq('student_id', student.id)
+        .order('submitted_at', { ascending: false });
+
+      if (qSubs) setStudentQuizResults(qSubs);
+
+      // 2. Fetch Attendance Logs for this student
+      const { data: attLogs } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('student_id', student.id)
+        .order('marked_at', { ascending: false });
+
+      if (attLogs) setStudentAttendanceLogs(attLogs);
+    } catch (err) {
+      console.error('Report fetch error:', err);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  const handleCreateZoomMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCourse) return;
+
+    if (!isZoomConfigured) {
+      alert('කරුණාකර මුලින්ම Zoom Account ටැබ් එකට ගොස් ඔබගේ Zoom Credentials ඇතුළත් කර Save කරන්න.');
+      setMainView('zoom_config');
+      return;
+    }
+
+    setIsCreatingMeeting(true);
+    try {
+      const res = await fetch('/api/zoom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: meetingTopic || selectedCourse.title,
+          duration: Number(meetingDuration) || 120,
+          courseId: selectedCourse.id
+        })
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Meeting එක සාදා ගැනීමට නොහැකි විය');
+
+      await loadCourseDetails(selectedCourse.id);
+      alert('Zoom Live Meeting සාර්ථකව නිර්මාණය විය!');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsCreatingMeeting(false);
+    }
+  };
+
+  const handleCopyWhatsAppText = () => {
+    if (!activeMeeting || !selectedCourse) return;
+    const msg = `📢 *${selectedCourse.title} - සජීවී Zoom පන්තිය*\n\n` +
+      `📌 මාතෘකාව: ${activeMeeting.topic}\n` +
+      `⏱️ කාලය: විනාඩි ${activeMeeting.duration_minutes}\n\n` +
+      `🔗 පන්තියට සම්බන්ධ වීමට Link එක:\n${activeMeeting.join_url}\n\n` +
+      `🆔 Meeting ID: ${activeMeeting.meeting_id || 'Direct'}\n` +
+      `🔑 Passcode: ${activeMeeting.password || 'None'}\n\n` +
+      `සියලු සිසුන් නියමිත වේලාවට සම්බන්ධ වන්න!`;
+
+    navigator.clipboard.writeText(msg);
+    alert('WhatsApp ආරාධනා පණිවිඩය සාර්ථකව Copy විය!');
+  };
+
+  // Student Actions: Auto Generate Username & Password
+  const handleAddStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentName || !selectedCourse) return;
+
+    const autoIndex = studentIndex.trim() || `ST-${Math.floor(1000 + Math.random() * 9000)}`;
+    const autoPassword = studentCustomPass.trim() || Math.floor(100000 + Math.random() * 900000).toString();
+
+    const { data: newStu, error: err } = await supabase.from('students').insert([{
+      index_number: autoIndex,
+      full_name: studentName.trim(),
+      whatsapp_number: studentPhone.trim() || '0770000000',
+      grade: selectedCourse.grade,
+      password: autoPassword
+    }]).select().single();
+
+    if (newStu && !err) {
+      await supabase.from('enrollments').insert([{ student_id: newStu.id, course_id: selectedCourse.id, is_active: true }]);
+      setStudentName('');
+      setStudentPhone('');
+      setStudentIndex('');
+      setStudentCustomPass('');
+      await loadCourseDetails(selectedCourse.id);
+
+      const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
+        `ඔබගේ ශිෂ්‍ය ගිණුමේ විස්තර (Login Details):\n` +
+        `🔗 Student Portal: ${window.location.origin}/student\n` +
+        `👤 Username (Index No): *${newStu.index_number}*\n` +
+        `🔑 Password: *${newStu.password || autoPassword}*\n\n` +
+        `⚠️ කරුණාකර මෙම තොරතුරු ඔබගේ දුරකථනයෙන් හෝ පරිගණකයෙන් ඇතුළත් කර Login වන්න. (පළමු වර Log වන Device එකට පමණක් ඔබගේ ගිණුම සීමා වේ)`;
+
+      navigator.clipboard.writeText(credText);
+      alert(`ශිෂ්‍යයා සාර්ථකව Enroll විය!\n\nUsername: ${newStu.index_number}\nPassword: ${newStu.password || autoPassword}\n\n(WhatsApp Login Message එක දැනටමත් Copy කරගන්නා ලදී)`);
+    } else {
+      alert('Enrollment Error: ' + (err?.message || 'දෝෂයක් මතු විය'));
+    }
+  };
+
+  const handleCopyStudentLogin = (st: any) => {
+    if (!selectedCourse) return;
+    const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
+      `ඔබගේ ශිෂ්‍ය ගිණුමේ විස්තර (Login Details):\n` +
+      `🔗 Student Portal: ${window.location.origin}/student\n` +
+      `👤 Username (Index No): *${st.index_number}*\n` +
+      `🔑 Password: *${st.password || st.whatsapp_number || '123456'}*\n\n` +
+      `⚠️ කරුණාකර මෙම තොරතුරු ඔබගේ දුරකථනයෙන් හෝ පරිගණකයෙන් ඇතුළත් කර Login වන්න. (පළමු වර Log වන Device එකට පමණක් ඔබගේ ගිණුම සීමා වේ)`;
+
+    navigator.clipboard.writeText(credText);
+    alert(`${st.full_name} සිසුවාගේ Login Details (WhatsApp Message) Copy කරගන්නා ලදී!`);
+  };
+
+  const handleUnlockDevice = async (studentId: string) => {
+    const { error } = await supabase.from('students').update({ device_id: null }).eq('id', studentId);
+    if (!error) {
+      alert('Device එක සාර්ථකව Unlock කරන ලදී! ශිෂ්‍යයාට නව Device එකකින් ලොග් විය හැක.');
+      loadCourseDetails(selectedCourse.id);
+    } else {
+      alert('Unlock Error: ' + error.message);
+    }
+  };
+
+  const handleAddRecording = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recordingTitle || !recordingId || !selectedCourse) return;
+    
+    let cleanId = recordingId.trim();
+    if (cleanId.includes('v=')) {
+      cleanId = cleanId.split('v=')[1].split('&')[0];
+    } else if (cleanId.includes('youtu.be/')) {
+      cleanId = cleanId.split('youtu.be/')[1].split('?')[0];
+    }
+
+    const { error } = await supabase.from('recordings').insert([{
+      course_id: selectedCourse.id,
+      title: recordingTitle,
+      youtube_video_id: cleanId
+    }]);
+
+    if (!error) {
+      setRecordingTitle('');
+      setRecordingId('');
+      loadCourseDetails(selectedCourse.id);
+      alert('Recording එක සාර්ථකව එකතු විය!');
+    }
+  };
+
+  const handleDeleteRecording = async (recId: string) => {
+    if (!confirm('මෙම Recording එක ඉවත් කිරීමට අවශ්‍යද?')) return;
+    await supabase.from('recordings').delete().eq('id', recId);
+    loadCourseDetails(selectedCourse.id);
+  };
+
+  const handleAddMaterial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!materialTitle || !materialUrl || !selectedCourse) return;
+    await supabase.from('materials').insert([{ course_id: selectedCourse.id, title: materialTitle, file_url: materialUrl, tute_type: 'PDF' }]);
+    setMaterialTitle('');
+    setMaterialUrl('');
+    loadCourseDetails(selectedCourse.id);
+    alert('Tute එක සාර්ථකව Upload විය!');
+  };
+
+  const handleCreateQuiz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quizTitle || !selectedCourse) return;
+    const { data: qz } = await supabase.from('quizzes').insert([{
+      course_id: selectedCourse.id,
+      title: quizTitle,
+      duration_minutes: Number(quizDuration) || 20,
+      enable_watermark: true,
+      total_marks: 100
+    }]).select().single();
+
+    if (qz && qText && opt0 && opt1) {
+      await supabase.from('quiz_questions').insert([{
+        quiz_id: qz.id,
+        question_text: qText,
+        options: [opt0, opt1, 'None', 'None'],
+        correct_option: Number(correctOpt),
+        marks: 100
+      }]);
+      setQuizTitle('');
+      setQText('');
+      setOpt0('');
+      setOpt1('');
+      loadCourseDetails(selectedCourse.id);
+      alert('Quiz එක සාර්ථකව පළ විය!');
+    }
+  };
+
+  const handleUpdateSlipStatus = async (slipId: string, status: 'Approved' | 'Rejected') => {
+    await supabase.from('slips').update({ status }).eq('id', slipId);
+    if (selectedCourse) loadCourseDetails(selectedCourse.id);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#070b14] text-white font-sans selection:bg-purple-500 selection:text-white">
+      {/* Top Header */}
+      <header className="border-b border-slate-800/80 px-6 py-4 bg-[#0c1322] sticky top-0 z-30 flex items-center justify-between shadow-md">
+        <div className="flex items-center gap-3">
+          <Link href="/" className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+          <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center font-bold">
+            <GraduationCap className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-sm tracking-wide">Teacher Master Panel</h1>
+            <p className="text-[10px] text-slate-400 font-mono">Digimart Control Center</p>
+          </div>
+        </div>
+
+        {/* Center Main Nav */}
+        <div className="flex items-center bg-[#070b14] p-1 rounded-2xl border border-slate-800">
+          <button
+            onClick={() => { setMainView('classes'); setSelectedCourse(null); }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              mainView === 'classes' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" /> Classes Hub
+          </button>
+          <button
+            onClick={() => setMainView('zoom_config')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              mainView === 'zoom_config' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5" /> Zoom Account
+            {isZoomConfigured ? (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block"></span>
+            )}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link href="/student" target="_blank" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300 transition flex items-center gap-2">
+            <span>Student View</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto p-6 space-y-6">
+
+        {/* ZOOM CONFIG VIEW */}
+        {mainView === 'zoom_config' && (
+          <div className="max-w-2xl mx-auto space-y-6">
+            <div className="bg-[#0c1322] border border-slate-800/80 p-8 rounded-3xl shadow-xl space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600/10 text-blue-400 flex items-center justify-center flex-shrink-0">
+                  <KeyRound className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Zoom Account Credentials</h2>
+                  <p className="text-xs text-slate-400 leading-relaxed mt-1">
+                    Zoom Server-to-Server OAuth හි Account ID, Client ID සහ Client Secret මෙහි Save කරන්න.
+                  </p>
+                </div>
+              </div>
+
+              {isZoomConfigured && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>Zoom Account එක සාර්ථකව සම්බන්ධ වී ඇත!</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveZoomSettings} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">Zoom Account ID</label>
+                  <input
+                    type="text" value={zoomAccountId} onChange={(e) => setZoomAccountId(e.target.value)}
+                    placeholder="kH9bXyZ..." className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">Client ID</label>
+                  <input
+                    type="text" value={zoomClientId} onChange={(e) => setZoomClientId(e.target.value)}
+                    placeholder="7abcDefGhi..." className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">Client Secret</label>
+                  <input
+                    type="password" value={zoomClientSecret} onChange={(e) => setZoomClientSecret(e.target.value)}
+                    placeholder="••••••••••••••••••••••••" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
+                  />
+                </div>
+                <button
+                  type="submit" disabled={isSavingZoom}
+                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                >
+                  {isSavingZoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  <span>Save Zoom Credentials</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ALL CLASSES LIST */}
+        {mainView === 'classes' && !selectedCourse && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black">Your Classes</h2>
+                <p className="text-xs text-slate-400">පන්තියක් තෝරා Zoom, සිසුන්, Recordings සහ Tutes කළමනාකරණය කරන්න.</p>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-2xl transition flex items-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Create New Class
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="p-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> පන්ති ලෝඩ් වෙමින් පවතී...
+              </div>
+            ) : courses.length === 0 ? (
+              <div className="border border-dashed border-slate-800 rounded-3xl p-12 text-center text-slate-500 text-xs">
+                තවම පන්ති සාදා නැත. "Create New Class" ඔබන්න.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {courses.map((c) => (
+                  <div key={c.id} className="bg-[#0c1322] border border-slate-800/80 rounded-3xl p-6 space-y-4 shadow-xl">
+                    <div className="flex items-start justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20">
+                        {c.grade} • {c.class_type}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-emerald-400">Rs. {c.monthly_fee}/-</span>
+                    </div>
+                    <h3 className="text-base font-bold text-white line-clamp-1">{c.title}</h3>
+                    <button
+                      onClick={() => openCourseManager(c)}
+                      className="w-full py-2.5 bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Settings className="w-3.5 h-3.5" /> Manage Class Hub
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SINGLE CLASS HUB */}
+        {mainView === 'classes' && selectedCourse && (
+          <div className="space-y-6">
+            <div className="bg-[#0c1322] p-6 rounded-3xl border border-slate-800/80 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <button onClick={() => setSelectedCourse(null)} className="text-xs text-purple-400 hover:underline mb-1 flex items-center gap-1 cursor-pointer">
+                  ← Back to all classes
+                </button>
+                <h2 className="text-xl font-black text-white">{selectedCourse.title}</h2>
+                <span className="text-xs text-slate-400">{selectedCourse.grade} • {selectedCourse.class_type}</span>
+              </div>
+
+              {activeMeeting && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold animate-pulse">
+                  <Radio className="w-3.5 h-3.5" /> Live Meeting Active
+                </span>
+              )}
+            </div>
+
+            {/* CLASS TABS */}
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('zoom')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'zoom' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Video className="w-4 h-4" /> Live Zoom Class
+              </button>
+
+              <button
+                onClick={() => setActiveTab('students')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'students' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Users className="w-4 h-4" /> Student Management ({students.length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab('recordings')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'recordings' ? 'bg-red-600 text-white shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <PlaySquare className="w-4 h-4" /> Lesson Recordings ({recordings.length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab('content')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'content' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" /> Tutes & Notes
+              </button>
+
+              <button
+                onClick={() => setActiveTab('quizzes')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'quizzes' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <HelpCircle className="w-4 h-4" /> Timed Quizzes
+              </button>
+            </div>
+
+            {/* TAB 1: ZOOM */}
+            {activeTab === 'zoom' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <form onSubmit={handleCreateZoomMeeting} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                  <div className="flex items-center gap-2">
+                    <Video className="w-5 h-5 text-blue-400" />
+                    <h3 className="font-bold text-sm text-white">Create New Zoom Meeting</h3>
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Class Topic</label>
+                      <input
+                        type="text" value={meetingTopic} onChange={(e) => setMeetingTopic(e.target.value)}
+                        placeholder="e.g. Unit 05 Discussion" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Duration (Minutes)</label>
+                      <input
+                        type="number" value={meetingDuration} onChange={(e) => setMeetingDuration(e.target.value)}
+                        placeholder="120" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit" disabled={isCreatingMeeting}
+                    className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/30 disabled:opacity-50"
+                  >
+                    {isCreatingMeeting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
+                    <span>{isCreatingMeeting ? 'Meeting එක සෑදෙමින් පවතී...' : 'Generate Zoom Meeting'}</span>
+                  </button>
+                </form>
+
+                <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl flex flex-col justify-between">
+                  <div>
+                    <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                      <Radio className="w-4 h-4 text-emerald-400" /> Active Zoom Details
+                    </h3>
+
+                    {activeMeeting ? (
+                      <div className="mt-4 space-y-4">
+                        <div className="p-4 rounded-2xl bg-[#131c31] border border-slate-700/50 space-y-2">
+                          <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Topic</span>
+                          <h4 className="text-sm font-bold text-white">{activeMeeting.topic}</h4>
+                          <div className="flex gap-4 pt-1 font-mono text-xs text-slate-300">
+                            <span>ID: <strong className="text-white">{activeMeeting.meeting_id || 'N/A'}</strong></span>
+                            <span>Pass: <strong className="text-emerald-400">{activeMeeting.password || 'None'}</strong></span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <a
+                            href={activeMeeting.start_url} target="_blank" rel="noreferrer"
+                            className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+                          >
+                            <ExternalLink className="w-4 h-4" /> Start Class as Host (ගුරුතුමාට)
+                          </a>
+                          <button
+                            onClick={handleCopyWhatsAppText}
+                            className="w-full py-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+                          >
+                            <Share2 className="w-4 h-4" /> Copy WhatsApp Student Invite
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-12 text-center text-slate-500 text-xs">
+                        <p>මෙම පන්තිය සඳහා තවම Zoom Meeting එකක් සාදා නැත.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: STUDENT MANAGEMENT WITH REPORTS, CREDENTIALS & 1-CLICK SHARE */}
+            {activeTab === 'students' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Enroll form */}
+                  <form onSubmit={handleAddStudent} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
+                    <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-purple-400" /> Enroll New Student
+                    </h3>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      නම සහ WhatsApp අංකය ලබා දෙන්න. Username සහ Password Auto-Generate වේ.
+                    </p>
+
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Full Name</label>
+                      <input
+                        type="text" placeholder="e.g. Kasun Madushanka" value={studentName} onChange={(e) => setStudentName(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">WhatsApp Number</label>
+                      <input
+                        type="text" placeholder="0771234567" value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold mb-1 block">Index Number (Optional)</label>
+                      <input
+                        type="text" placeholder="හිස්ව තැබුවහොත් Auto-Generate වේ" value={studentIndex} onChange={(e) => setStudentIndex(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700/60 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold mb-1 block">Custom Password (Optional)</label>
+                      <input
+                        type="text" placeholder="හිස්ව තැබුවහොත් 6-digit PIN එකක් ලැබේ" value={studentCustomPass} onChange={(e) => setStudentCustomPass(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700/60 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-600"
+                      />
+                    </div>
+
+                    <button type="submit" className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-purple-600/30">
+                      Enroll & Generate Login Credentials
+                    </button>
+                  </form>
+
+                  {/* Enrolled Students List with Performance Report Button */}
+                  <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Reports
+                      </h3>
+                      <span className="text-xs text-slate-400">{students.length} Total Enrolled</span>
+                    </div>
+
+                    {students.length === 0 ? (
+                      <p className="text-xs text-slate-500 py-8 text-center">තවම කිසිදු ශිෂ්‍යයෙක් ලියාපදිංචි කර නැත.</p>
+                    ) : (
+                      <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                        {students.map((st) => (
+                          <div key={st.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-1.5">
+                              <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                                {st.full_name}
+                              </h4>
+                              
+                              <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                                <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-purple-400">
+                                  User: <strong>{st.index_number}</strong>
+                                </span>
+                                <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-emerald-400 flex items-center gap-1">
+                                  <Key className="w-3 h-3" /> Pass: <strong>{st.password || st.whatsapp_number || '123456'}</strong>
+                                </span>
+                                <span className="text-slate-400 text-[11px]">
+                                  📱 {st.whatsapp_number}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Actions: View Report + Copy Login + Device Unlock */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* 1. VIEW STUDENT REPORT BUTTON */}
+                              <button
+                                onClick={() => handleOpenStudentReport(st)}
+                                title="විභාග ලකුණු සහ පැමිණීමේ සම්පූර්ණ වාර්තාව බලන්න"
+                                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-blue-600/30"
+                              >
+                                <BarChart3 className="w-3.5 h-3.5" />
+                                <span>Report</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleCopyStudentLogin(st)}
+                                title="Login Details WhatsApp Message එක Copy කරගන්න"
+                                className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Login</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleUnlockDevice(st.id)}
+                                title="Device reset කර ශිෂ්‍යයාට නව Device එකකින් ලොග් වීමට අවසර දෙන්න"
+                                className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                              >
+                                <Unlock className="w-3.5 h-3.5" />
+                                <span>Unlock</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bank Slips & Payment Approvals Section */}
+                <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-emerald-400" /> Student Bank Slips & Payment Status
+                      </h3>
+                      <p className="text-xs text-slate-400">සිසුන් එවූ බැංකු රිසිට්පත් පරීක්ෂා කර Approve හෝ Reject කරන්න.</p>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-emerald-400">{slips.length} Slips Submitted</span>
+                  </div>
+
+                  {slips.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-6 text-center">තවම රිසිට්පත් කිසිවක් ලැබී නැත.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {slips.map((slp) => (
+                        <div key={slp.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h4 className="font-bold text-xs text-white">{slp.students?.full_name}</h4>
+                              <span className="text-[10px] text-slate-400 font-mono">ID: {slp.students?.index_number}</span>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                              slp.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            }`}>
+                              {slp.status}
+                            </span>
+                          </div>
+
+                          <div className="pt-1">
+                            <a
+                              href={slp.slip_url} target="_blank" rel="noreferrer"
+                              className="text-xs text-blue-400 hover:underline flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800"
+                            >
+                              <FileText className="w-4 h-4" />
+                              <span className="truncate">View Uploaded Slip ➔</span>
+                            </a>
+                          </div>
+
+                          {slp.status !== 'Approved' && (
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                onClick={() => handleUpdateSlipStatus(slp.id, 'Approved')}
+                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleUpdateSlipStatus(slp.id, 'Rejected')}
+                                className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: LESSON RECORDINGS */}
+            {activeTab === 'recordings' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <form onSubmit={handleAddRecording} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
+                  <div className="flex items-center gap-2">
+                    <PlaySquare className="w-5 h-5 text-red-400" />
+                    <h3 className="font-bold text-sm text-white">Add Past Lesson Recording</h3>
+                  </div>
+                  <p className="text-xs text-slate-400">පන්ති පාඩමේ YouTube Video Link එක හෝ Video ID එක මෙහි ඇතුළත් කරන්න.</p>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Lesson Title</label>
+                      <input
+                        type="text" placeholder="e.g. Lesson 01 - Theory Revision" value={recordingTitle}
+                        onChange={(e) => setRecordingTitle(e.target.value)} className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">YouTube Video ID / URL</label>
+                      <input
+                        type="text" placeholder="e.g. dQw4w9WgXcQ" value={recordingId}
+                        onChange={(e) => setRecordingId(e.target.value)} className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                      />
+                    </div>
+                  </div>
+
+                  <button type="submit" className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-red-600/30">
+                    Add Recording
+                  </button>
+                </form>
+
+                <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                  <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                    <PlaySquare className="w-4 h-4 text-red-400" /> Uploaded Recordings ({recordings.length})
+                  </h3>
+
+                  {recordings.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-8 text-center">තවම කිසිදු Recording එකක් දමා නැත.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {recordings.map((rec) => (
+                        <div key={rec.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl space-y-3">
+                          <h4 className="font-bold text-xs text-white line-clamp-1">{rec.title}</h4>
+                          <div className="text-[11px] text-slate-400 font-mono">ID: {rec.youtube_video_id}</div>
+                          <div className="flex items-center justify-between pt-1">
+                            <a
+                              href={`https://youtube.com/watch?v=${rec.youtube_video_id}`} target="_blank" rel="noreferrer"
+                              className="text-xs text-red-400 hover:underline flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" /> Watch on YouTube
+                            </a>
+                            <button
+                              onClick={() => handleDeleteRecording(rec.id)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 transition cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: TUTES */}
+            {activeTab === 'content' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <form onSubmit={handleAddMaterial} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                  <h3 className="font-bold text-sm text-white">Upload New Tute / PDF</h3>
+                  <input
+                    type="text" placeholder="Tute Title" value={materialTitle} onChange={(e) => setMaterialTitle(e.target.value)}
+                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                  />
+                  <input
+                    type="url" placeholder="PDF File URL (Google Drive etc.)" value={materialUrl} onChange={(e) => setMaterialUrl(e.target.value)}
+                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                  />
+                  <button type="submit" className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
+                    Add PDF Material
+                  </button>
+                </form>
+
+                <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-3 shadow-xl">
+                  <h3 className="font-bold text-sm text-white">Active Tutes ({materials.length})</h3>
+                  {materials.map(m => (
+                    <div key={m.id} className="p-3 bg-[#131c31] border border-slate-700/50 rounded-xl flex items-center justify-between">
+                      <span className="text-xs text-white font-medium truncate">{m.title}</span>
+                      <a href={m.file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">Download ➔</a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 5: QUIZZES */}
+            {activeTab === 'quizzes' && (
+              <form onSubmit={handleCreateQuiz} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                <h3 className="font-bold text-sm text-white">Create Anti-Cheat Timed Quiz</h3>
+                <input
+                  type="text" placeholder="Quiz Title" value={quizTitle} onChange={(e) => setQuizTitle(e.target.value)}
+                  className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                />
+                <input
+                  type="text" placeholder="Question Text" value={qText} onChange={(e) => setQText(e.target.value)}
+                  className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Option 1" value={opt0} onChange={(e) => setOpt0(e.target.value)} className="bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+                  <input type="text" placeholder="Option 2" value={opt1} onChange={(e) => setOpt1(e.target.value)} className="bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+                </div>
+                <button type="submit" className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
+                  Save Quiz & Publish
+                </button>
+              </form>
+            )}
+
+          </div>
+        )}
+      </main>
+
+      {/* ================= MODAL: STUDENT PERFORMANCE & EXAM REPORT ================= */}
+      {selectedStudentForReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 shadow-2xl space-y-6">
+            
+            {/* Header with Student Summary */}
+            <div className="flex items-start justify-between border-b border-slate-800 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold">
+                  <BarChart3 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    {selectedStudentForReport.full_name}
+                    <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                      ID: {selectedStudentForReport.index_number}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    📱 {selectedStudentForReport.whatsapp_number} • {selectedCourse?.title}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedStudentForReport(null)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {loadingReport ? (
+              <div className="py-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> ප්‍රතිඵල වාර්තාව සූදානම් වෙමින් පවතී...
+              </div>
+            ) : (
+              <div className="space-y-6">
+                
+                {/* 1. Quick Stats Cards */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">මුහුණ දුන් විභාග</span>
+                    <h4 className="text-xl font-black text-white mt-1">{studentQuizResults.length}</h4>
+                  </div>
+                  <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">ලබාගත් සාමාන්‍යය</span>
+                    <h4 className="text-xl font-black text-emerald-400 mt-1">
+                      {studentQuizResults.length > 0 
+                        ? `${Math.round(studentQuizResults.reduce((a, b) => a + Number(b.score || 0), 0) / studentQuizResults.length)}%` 
+                        : '0%'}
+                    </h4>
+                  </div>
+                  <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">සජීවී පැමිණීම (Live)</span>
+                    <h4 className="text-xl font-black text-blue-400 mt-1">{studentAttendanceLogs.length} දින</h4>
+                  </div>
+                </div>
+
+                {/* 2. Detailed Quiz Results Table */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-400" /> විභාග ලකුණු සහ ප්‍රතිඵල (Quiz Submissions)
+                  </h4>
+
+                  {studentQuizResults.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-[#070b14] border border-slate-800 text-center text-slate-500 text-xs">
+                      මෙම ශිෂ්‍යයා තවමත් කිසිදු විභාගයකට (Quiz) මුහුණ දී නැත.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {studentQuizResults.map((res) => (
+                        <div key={res.id} className="p-3.5 bg-[#070b14] border border-slate-800/80 rounded-2xl flex items-center justify-between">
+                          <div>
+                            <h5 className="font-bold text-xs text-white">{res.quizzes?.title || 'Online Exam'}</h5>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              දිනය: {new Date(res.submitted_at).toLocaleDateString()} • වේලාව: {new Date(res.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                              ලකුණු: {res.score} / {res.quizzes?.total_marks || 100}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Attendance Log */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-400" /> Zoom පන්ති පැමිණීමේ ඉතිහාසය (Attendance Logs)
+                  </h4>
+
+                  {studentAttendanceLogs.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 text-center text-slate-500 text-xs">
+                      පැමිණීමේ සටහන් කිසිවක් නැත.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {studentAttendanceLogs.map((att) => (
+                        <div key={att.id} className="p-3 bg-[#070b14] border border-slate-800/80 rounded-xl flex items-center justify-between text-xs">
+                          <span className="text-slate-300 font-mono">
+                            {new Date(att.marked_at).toLocaleDateString()} {new Date(att.marked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                            Present ({att.duration_minutes}m)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* CREATE CLASS MODAL */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-white">Create New Class</h3>
+            <form onSubmit={handleCreateCourse} className="space-y-3">
+              <input
+                type="text" placeholder="Class Name (e.g. 2026 A/L Biology)"
+                value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+                className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+              />
+              <input
+                type="text" placeholder="Grade (e.g. Grade 13 / 2026 A/L)"
+                value={newGrade} onChange={(e) => setNewGrade(e.target.value)}
+                className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+              />
+              <input
+                type="number" placeholder="Monthly Fee (e.g. 2500)"
+                value={newFee} onChange={(e) => setNewFee(e.target.value)}
+                className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+              />
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSubmittingCourse} className="px-5 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold cursor-pointer">
+                  Create Class
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+</files>

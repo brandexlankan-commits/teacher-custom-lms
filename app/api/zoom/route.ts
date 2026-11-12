@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const { topic, duration, courseId } = await req.json();
 
-    // 1. Database එකෙන් Zoom Credentials ලබා ගැනීම
+    // 1. Fetch Zoom Credentials from Database
     const { data: creds } = await supabase
       .from('zoom_settings')
       .select('*')
@@ -15,13 +15,13 @@ export async function POST(req: Request) {
 
     if (!creds || !creds.account_id || !creds.client_id || !creds.client_secret) {
       return NextResponse.json({
-        error: 'Zoom Credentials හමුවූයේ නැත. කරුණාකර "Zoom Account" ටැබ් එකට ගොස් ඔබගේ Account ID, Client ID සහ Client Secret ඇතුළත් කර Save කරන්න.'
+        error: 'Zoom Credentials not found. Please go to the "Zoom Account" tab, enter your Account ID, Client ID, and Client Secret, and click Save.'
       }, { status: 400 });
     }
 
     const { account_id, client_id, client_secret } = creds;
 
-    // 2. Zoom OAuth Token ලබා ගැනීම
+    // 2. Get Zoom OAuth Token
     const authHeader = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
     const tokenRes = await fetch(
       `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${account_id}`,
@@ -34,13 +34,13 @@ export async function POST(req: Request) {
     const tokenData = await tokenRes.json();
     if (!tokenRes.ok) {
       return NextResponse.json({
-        error: `Zoom සම්බන්ධතාවය අසාර්ථක විය: ${tokenData.message || tokenData.error || 'Invalid credentials'}`
+        error: `Zoom connection failed: ${tokenData.message || tokenData.error || 'Invalid credentials'}`
       }, { status: 400 });
     }
 
     const accessToken = tokenData.access_token;
 
-    // 3. Zoom Live Meeting එකක් Create කිරීම
+    // 3. Create Zoom Live Meeting
     const meetingRes = await fetch('https://api.zoom.us/v2/users/me/meetings', {
       method: 'POST',
       headers: {
@@ -64,11 +64,11 @@ export async function POST(req: Request) {
     const meetingData = await meetingRes.json();
     if (!meetingRes.ok) {
       return NextResponse.json({
-        error: `Meeting සාදාගැනීම අසාර්ථක විය: ${meetingData.message || 'Error creating meeting'}`
+        error: `Failed to create meeting: ${meetingData.message || 'Error creating meeting'}`
       }, { status: 400 });
     }
 
-    // 4. Meeting එක Database එකට Save කර Course Zoom Link update කිරීම
+    // 4. Save Meeting to Database and Update Course Zoom Link
     if (courseId) {
       await supabase.from('zoom_meetings').insert([{
         course_id: courseId,
