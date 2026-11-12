@@ -9,7 +9,7 @@ import {
   GraduationCap, ArrowLeft, Loader2, KeyRound, 
   Radio, Share2, Layers, AlertCircle, Smartphone, 
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
-  Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut
+  Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut, Upload
 } from 'lucide-react';
 
 export default function TeacherMasterDashboard() {
@@ -70,7 +70,9 @@ export default function TeacherMasterDashboard() {
   const [studentCustomPass, setStudentCustomPass] = useState('');
 
   const [materialTitle, setMaterialTitle] = useState('');
-  const [materialUrl, setMaterialUrl] = useState('');
+  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
+
   const [recordingTitle, setRecordingTitle] = useState('');
   const [recordingId, setRecordingId] = useState('');
   const [quizTitle, setQuizTitle] = useState('');
@@ -400,12 +402,45 @@ export default function TeacherMasterDashboard() {
 
   const handleAddMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!materialTitle || !materialUrl || !selectedCourse) return;
-    await supabase.from('materials').insert([{ course_id: selectedCourse.id, title: materialTitle, file_url: materialUrl, tute_type: 'PDF' }]);
-    setMaterialTitle('');
-    setMaterialUrl('');
-    loadCourseDetails(selectedCourse.id);
-    alert('Tute uploaded successfully!');
+    if (!materialTitle || !materialFile || !selectedCourse) return;
+    setIsUploadingMaterial(true);
+
+    try {
+      const fileExt = materialFile.name.split('.').pop() || 'pdf';
+      const filePath = `tutes/${selectedCourse.id}_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('lms-files')
+        .upload(filePath, materialFile, { upsert: true });
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('lms-files')
+        .getPublicUrl(filePath);
+
+      const { error: dbError } = await supabase.from('materials').insert([{
+        course_id: selectedCourse.id,
+        title: materialTitle,
+        file_url: urlData.publicUrl,
+        tute_type: fileExt.toUpperCase()
+      }]);
+
+      if (dbError) {
+        throw new Error(dbError.message);
+      }
+
+      setMaterialTitle('');
+      setMaterialFile(null);
+      loadCourseDetails(selectedCourse.id);
+      alert('Tute uploaded successfully!');
+    } catch (err: any) {
+      alert('Upload Error: ' + err.message);
+    } finally {
+      setIsUploadingMaterial(false);
+    }
   };
 
   const handleCreateQuiz = async (e: React.FormEvent) => {
@@ -658,7 +693,7 @@ export default function TeacherMasterDashboard() {
               </div>
             ) : courses.length === 0 ? (
               <div className="border border-dashed border-slate-800 rounded-3xl p-12 text-center text-slate-500 text-xs">
-                No classes created yet. Click "Create New Class" to get started.
+                No classes created yet. Click &quot;Create New Class&quot; to get started.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -838,7 +873,7 @@ export default function TeacherMasterDashboard() {
                       <Plus className="w-4 h-4 text-purple-400" /> Enroll New Student
                     </h3>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Enter the student's name and WhatsApp number. Username and password will be auto-generated.
+                      Enter the student&apos;s name and WhatsApp number. Username and password will be auto-generated.
                     </p>
 
                     <div>
@@ -1084,27 +1119,45 @@ export default function TeacherMasterDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <form onSubmit={handleAddMaterial} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                   <h3 className="font-bold text-sm text-white">Upload New Tute / PDF</h3>
-                  <input
-                    type="text" placeholder="Tute Title" value={materialTitle} onChange={(e) => setMaterialTitle(e.target.value)}
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
-                  />
-                  <input
-                    type="url" placeholder="PDF File URL (Google Drive etc.)" value={materialUrl} onChange={(e) => setMaterialUrl(e.target.value)}
-                    className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
-                  />
-                  <button type="submit" className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
-                    Add PDF Material
+                  <div>
+                    <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Tute Title</label>
+                    <input
+                      type="text" placeholder="e.g. Unit 01 Study Notes" value={materialTitle} onChange={(e) => setMaterialTitle(e.target.value)}
+                      className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Select PDF / Document File</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,image/*"
+                      onChange={(e) => setMaterialFile(e.target.files?.[0] || null)}
+                      className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-600/20 file:text-emerald-400 hover:file:bg-emerald-600/30 cursor-pointer"
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isUploadingMaterial || !materialFile}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isUploadingMaterial ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    <span>{isUploadingMaterial ? 'Uploading Tute...' : 'Upload PDF Material'}</span>
                   </button>
                 </form>
 
                 <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-3 shadow-xl">
                   <h3 className="font-bold text-sm text-white">Active Tutes ({materials.length})</h3>
-                  {materials.map(m => (
-                    <div key={m.id} className="p-3 bg-[#131c31] border border-slate-700/50 rounded-xl flex items-center justify-between">
-                      <span className="text-xs text-white font-medium truncate">{m.title}</span>
-                      <a href={m.file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">Download ➔</a>
-                    </div>
-                  ))}
+                  {materials.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-6 text-center">No tutes uploaded yet.</p>
+                  ) : (
+                    materials.map(m => (
+                      <div key={m.id} className="p-3 bg-[#131c31] border border-slate-700/50 rounded-xl flex items-center justify-between">
+                        <span className="text-xs text-white font-medium truncate">{m.title}</span>
+                        <a href={m.file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">Download ➔</a>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

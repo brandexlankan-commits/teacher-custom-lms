@@ -7,7 +7,7 @@ import {
   GraduationCap, Video, BookOpen, Clock, 
   HelpCircle, CheckCircle2, XCircle, Award, 
   ArrowLeft, Download, ShieldCheck, PlaySquare, 
-  Lock, X, CreditCard, AlertCircle, LogOut, KeyRound, Smartphone
+  Lock, X, CreditCard, AlertCircle, LogOut, KeyRound, Smartphone, Upload, Loader2
 } from 'lucide-react';
 
 export default function StudentPortal() {
@@ -31,8 +31,8 @@ export default function StudentPortal() {
   const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
-  // Bank Slip
-  const [slipUrl, setSlipUrl] = useState('');
+  // Bank Slip File Upload States
+  const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipStatus, setSlipStatus] = useState<string | null>(null);
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
 
@@ -196,17 +196,46 @@ export default function StudentPortal() {
 
   const handleUploadSlip = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!slipUrl || !currentCourse || !studentInfo) return;
+    if (!slipFile || !currentCourse || !studentInfo) return;
     setIsUploadingSlip(true);
-    const { error } = await supabase.from('slips').insert([
-      { student_id: studentInfo.id, course_id: currentCourse.id, slip_url: slipUrl, status: 'Pending' }
-    ]);
-    if (!error) {
+
+    try {
+      const fileExt = slipFile.name.split('.').pop() || 'jpg';
+      const filePath = `slips/${studentInfo.indexNo}_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('lms-files')
+        .upload(filePath, slipFile, { upsert: true });
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('lms-files')
+        .getPublicUrl(filePath);
+
+      const { error: dbError } = await supabase.from('slips').insert([
+        {
+          student_id: studentInfo.id,
+          course_id: currentCourse.id,
+          slip_url: urlData.publicUrl,
+          status: 'Pending'
+        }
+      ]);
+
+      if (dbError) {
+        throw new Error(dbError.message);
+      }
+
       setSlipStatus('Pending');
-      setSlipUrl('');
-      alert('Your bank slip has been submitted successfully.');
+      setSlipFile(null);
+      alert('Your bank slip has been uploaded successfully!');
+    } catch (err: any) {
+      alert('Upload Error: ' + err.message);
+    } finally {
+      setIsUploadingSlip(false);
     }
-    setIsUploadingSlip(false);
   };
 
   const handleStartQuiz = async (quiz: any) => {
@@ -305,7 +334,7 @@ export default function StudentPortal() {
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
                 required
               />
-              <span className="text-[10px] text-slate-500 mt-1 block">* If you don't know your password, please enter your WhatsApp phone number.</span>
+              <span className="text-[10px] text-slate-500 mt-1 block">* If you don&apos;t know your password, please enter your WhatsApp phone number.</span>
             </div>
 
             <button
@@ -396,11 +425,11 @@ export default function StudentPortal() {
                     </div>
                   ) : slipStatus === 'Pending' ? (
                     <div className="text-xs text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 inline-flex items-center gap-1.5">
-                      <Clock className="w-4 h-4" /> Bank slip submitted (Pending). Please wait for your teacher's approval.
+                      <Clock className="w-4 h-4" /> Bank slip uploaded (Pending). Please wait for your teacher&apos;s approval.
                     </div>
                   ) : (
                     <div className="text-xs text-slate-300">
-                      Monthly Fee: <strong className="text-emerald-400 font-mono text-sm">Rs. {currentCourse.monthly_fee}/-</strong>. Upload your bank slip link below.
+                      Monthly Fee: <strong className="text-emerald-400 font-mono text-sm">Rs. {currentCourse.monthly_fee}/-</strong>. Select and upload your bank slip photo or PDF below.
                     </div>
                   )}
                 </div>
@@ -408,19 +437,20 @@ export default function StudentPortal() {
                 {slipStatus !== 'Approved' && (
                   <form onSubmit={handleUploadSlip} className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                     <input
-                      type="url"
-                      placeholder="Bank Slip URL / Drive Link..."
-                      value={slipUrl}
-                      onChange={(e) => setSlipUrl(e.target.value)}
-                      className="flex-1 min-w-[240px] bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+                      type="file"
+                      accept="image/*,.pdf"
+                      disabled={isUploadingSlip || slipStatus === 'Pending'}
+                      onChange={(e) => setSlipFile(e.target.files?.[0] || null)}
+                      className="flex-1 min-w-[240px] bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-600/20 file:text-purple-400 hover:file:bg-purple-600/30 cursor-pointer"
                       required
                     />
                     <button
                       type="submit"
-                      disabled={isUploadingSlip || slipStatus === 'Pending'}
-                      className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer"
+                      disabled={isUploadingSlip || slipStatus === 'Pending' || !slipFile}
+                      className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
-                      Submit Slip
+                      {isUploadingSlip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                      <span>{isUploadingSlip ? 'Uploading...' : 'Submit Slip'}</span>
                     </button>
                   </form>
                 )}
