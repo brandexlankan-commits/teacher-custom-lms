@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Verify Enrollment & Approved Payment Slip
+    // 2. Verify Enrollment & Flexible Monthly Access Control (Sri Lanka Timezone)
     const { data: enrollment } = await supabase
       .from('enrollments')
       .select('*')
@@ -42,18 +42,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'You are not enrolled in this class.' }, { status: 403 });
     }
 
-    const { data: slip } = await supabase
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' }); // 'YYYY-MM-DD'
+    const currentMonth = todayStr.slice(0, 7); // 'YYYY-MM'
+    const dayOfMonth = Number(todayStr.slice(8, 10));
+
+    const isFreeCard = Boolean(enrollment.is_free_card);
+    const hasValidExtension = Boolean(enrollment.access_until && todayStr <= enrollment.access_until);
+    const isWithinGracePeriod = dayOfMonth <= 15;
+
+    const { data: approvedSlip } = await supabase
       .from('slips')
-      .select('status')
+      .select('id')
       .eq('student_id', studentId)
       .eq('course_id', courseId)
-      .order('submitted_at', { ascending: false })
+      .eq('billing_month', currentMonth)
+      .eq('status', 'Approved')
       .limit(1)
       .maybeSingle();
 
-    if (!slip || slip.status !== 'Approved') {
+    const hasAccess = isFreeCard || hasValidExtension || isWithinGracePeriod || Boolean(approvedSlip);
+
+    if (!hasAccess) {
       return NextResponse.json(
-        { error: 'Payment approval required before joining live classes.' },
+        {
+          error: `Monthly fee grace period (1st–15th) has ended. Please submit your bank slip for ${currentMonth} or contact your teacher for access.`
+        },
         { status: 403 }
       );
     }

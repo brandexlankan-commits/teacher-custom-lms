@@ -74,9 +74,37 @@ function generateHardwareFingerprint(): string {
   }
 }
 
+function getColomboDateInfo() {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' }); // 'YYYY-MM-DD'
+  const currentMonth = todayStr.slice(0, 7); // 'YYYY-MM'
+  const dayOfMonth = Number(todayStr.slice(8, 10));
+  return { todayStr, currentMonth, dayOfMonth };
+}
+
+function formatMonthLabel(ym: string): string {
+  if (!ym || !ym.includes('-')) return ym;
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, (m || 1) - 1, 1);
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function getSelectableBillingMonths(baseYm: string): string[] {
+  const [y, m] = baseYm.split('-').map(Number);
+  const offsets = [-1, 0, 1];
+  return offsets.map((offset) => {
+    const d = new Date(y, (m || 1) - 1 + offset, 1);
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    return `${yr}-${mo}`;
+  });
+}
+
 export default function StudentPortal() {
+  const { todayStr, currentMonth, dayOfMonth } = getColomboDateInfo();
+
   const [studentInfo, setStudentInfo] = useState<any | null>(null);
   const [currentCourse, setCurrentCourse] = useState<any | null>(null);
+  const [enrollmentInfo, setEnrollmentInfo] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Login Form States
@@ -115,9 +143,10 @@ export default function StudentPortal() {
   const [minRequiredMinutes, setMinRequiredMinutes] = useState<number>(30);
   const [attendanceStatus, setAttendanceStatus] = useState<string | null>(null);
 
-  // Bank Slip File Upload States
+  // Monthly Bank Slip File Upload States
+  const [selectedBillingMonth, setSelectedBillingMonth] = useState<string>(currentMonth);
+  const [studentSlips, setStudentSlips] = useState<any[]>([]);
   const [slipFile, setSlipFile] = useState<File | null>(null);
-  const [slipStatus, setSlipStatus] = useState<string | null>(null);
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
 
   // Exam & Quiz Execution States
@@ -133,8 +162,16 @@ export default function StudentPortal() {
   const [cheatAlertMsg, setCheatAlertMsg] = useState<string | null>(null);
   const isSubmittingRef = useRef(false);
 
-  // Access Control Flag (Unlocked only when teacher approves bank slip)
-  const isUnlocked = slipStatus === 'Approved';
+  // Compute Flexible Access Control (Free Card / Extension Date / 1st-15th Grace Period / Current Month Approved Slip)
+  const currentMonthSlip = studentSlips.find((s) => (s.billing_month || '') === currentMonth) || null;
+  const selectedMonthSlip = studentSlips.find((s) => (s.billing_month || '') === selectedBillingMonth) || null;
+
+  const isFreeCard = Boolean(enrollmentInfo?.is_free_card);
+  const hasValidExtension = Boolean(enrollmentInfo?.access_until && todayStr <= enrollmentInfo.access_until);
+  const isWithinGracePeriod = dayOfMonth <= 15;
+  const isCurrentMonthApproved = currentMonthSlip?.status === 'Approved';
+
+  const isUnlocked = isFreeCard || hasValidExtension || isWithinGracePeriod || isCurrentMonthApproved;
 
   useEffect(() => {
     const savedStudent = localStorage.getItem('lms_student_session');
@@ -151,7 +188,7 @@ export default function StudentPortal() {
     }
   }, []);
 
-  // Initialize Protected YouTube IFrame API Player (Hides Share Icon, Title Bar & Native Controls)
+  // Initialize Protected YouTube IFrame API Player
   useEffect(() => {
     if (!activeVideoId || !isUnlocked) {
       setIsVideoReady(false);
@@ -167,7 +204,6 @@ export default function StudentPortal() {
     const initPlayer = () => {
       if (isCancelled || !playerContainerRef.current) return;
 
-      // Clear previous player DOM safely
       playerContainerRef.current.innerHTML = '';
       const mountDiv = document.createElement('div');
       mountDiv.style.width = '100%';
@@ -180,9 +216,9 @@ export default function StudentPortal() {
         height: '100%',
         playerVars: {
           autoplay: 1,
-          controls: 0, // Completely removes YouTube native bar, Share button, and Watch on YouTube link
+          controls: 0,
           disablekb: 1,
-          fs: 0, // Disables YouTube native fullscreen so our protected fullscreen wrapper is used
+          fs: 0,
           modestbranding: 1,
           rel: 0,
           iv_load_policy: 3,
@@ -236,7 +272,6 @@ export default function StudentPortal() {
       };
     }
 
-    // Shift Student Anti-Piracy Watermark position every 6 seconds
     const wmTimer = setInterval(() => {
       const tops = ['14%', '28%', '52%', '68%', '40%'];
       const lefts = ['10%', '48%', '24%', '56%', '18%'];
@@ -359,6 +394,7 @@ export default function StudentPortal() {
     localStorage.removeItem('lms_student_session');
     setStudentInfo(null);
     setCurrentCourse(null);
+    setEnrollmentInfo(null);
   };
 
   const verifyAndLoadStudent = async (studentId: string) => {
@@ -389,7 +425,7 @@ export default function StudentPortal() {
 
     const { data: enrollments } = await supabase
       .from('enrollments')
-      .select('course_id, courses(*)')
+      .select('*, courses(*)')
       .eq('student_id', stu.id)
       .limit(1)
       .maybeSingle();
@@ -397,6 +433,7 @@ export default function StudentPortal() {
     if (enrollments && enrollments.courses) {
       const course = enrollments.courses as any;
       setCurrentCourse(course);
+      setEnrollmentInfo(enrollments);
 
       const { data: mtg } = await supabase
         .from('zoom_meetings')
@@ -413,13 +450,18 @@ export default function StudentPortal() {
       const { data: mat } = await supabase.from('materials').select('*').eq('course_id', course.id);
       const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', course.id).order('created_at', { ascending: false });
       const { data: rec } = await supabase.from('recordings').select('*').eq('course_id', course.id);
-      const { data: slp } = await supabase.from('slips').select('*').eq('student_id', stu.id).eq('course_id', course.id).order('submitted_at', { ascending: false }).limit(1);
+      const { data: slp } = await supabase
+        .from('slips')
+        .select('*')
+        .eq('student_id', stu.id)
+        .eq('course_id', course.id)
+        .order('submitted_at', { ascending: false });
       const { data: subs } = await supabase.from('quiz_submissions').select('*').eq('student_id', stu.id).order('submitted_at', { ascending: false });
 
       if (mat) setMaterials(mat);
       if (qz) setQuizzes(qz);
       if (rec) setRecordings(rec);
-      if (slp && slp.length > 0) setSlipStatus(slp[0].status);
+      if (slp) setStudentSlips(slp);
 
       if (subs) {
         const subMap: Record<string, any> = {};
@@ -483,7 +525,7 @@ export default function StudentPortal() {
 
   const handleJoinClass = async () => {
     if (!isUnlocked) {
-      alert('Access Locked: Please upload your bank slip and wait for teacher approval to join live classes.');
+      alert('Access Locked: The monthly fee grace period (1st–15th) has ended. Please upload your bank slip for this month or contact your teacher.');
       return;
     }
 
@@ -525,12 +567,12 @@ export default function StudentPortal() {
 
   const handleUploadSlip = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!slipFile || !currentCourse || !studentInfo) return;
+    if (!slipFile || !currentCourse || !studentInfo || !selectedBillingMonth) return;
     setIsUploadingSlip(true);
 
     try {
       const fileExt = slipFile.name.split('.').pop() || 'jpg';
-      const filePath = `slips/${studentInfo.indexNo}_${Date.now()}.${fileExt}`;
+      const filePath = `slips/${studentInfo.indexNo}_${selectedBillingMonth}_${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('lms-files')
@@ -544,22 +586,29 @@ export default function StudentPortal() {
         .from('lms-files')
         .getPublicUrl(filePath);
 
-      const { error: dbError } = await supabase.from('slips').insert([
-        {
-          student_id: studentInfo.id,
-          course_id: currentCourse.id,
-          slip_url: urlData.publicUrl,
-          status: 'Pending'
-        }
-      ]);
+      const { data: insertedSlip, error: dbError } = await supabase
+        .from('slips')
+        .insert([
+          {
+            student_id: studentInfo.id,
+            course_id: currentCourse.id,
+            billing_month: selectedBillingMonth,
+            slip_url: urlData.publicUrl,
+            status: 'Pending'
+          }
+        ])
+        .select()
+        .single();
 
       if (dbError) {
         throw new Error(dbError.message);
       }
 
-      setSlipStatus('Pending');
+      if (insertedSlip) {
+        setStudentSlips((prev) => [insertedSlip, ...prev]);
+      }
       setSlipFile(null);
-      alert('Your bank slip has been uploaded successfully! Lessons will unlock once approved by your teacher.');
+      alert(`Bank slip for ${formatMonthLabel(selectedBillingMonth)} uploaded successfully! Waiting for teacher approval.`);
     } catch (err: any) {
       alert('Upload Error: ' + err.message);
     } finally {
@@ -569,7 +618,7 @@ export default function StudentPortal() {
 
   const handleStartQuiz = async (quiz: any) => {
     if (!isUnlocked) {
-      alert('Access Locked: Please upload your bank slip and wait for teacher approval to take online exams.');
+      alert('Access Locked: Please upload your bank slip for this month or contact your teacher to take online exams.');
       return;
     }
 
@@ -826,6 +875,10 @@ export default function StudentPortal() {
     );
   }
 
+  const selectableMonths = getSelectableBillingMonths(currentMonth);
+  const isSelectedMonthLockedForUpload =
+    selectedMonthSlip?.status === 'Approved' || selectedMonthSlip?.status === 'Pending';
+
   // ================= VIEW 3: STUDENT DASHBOARD =================
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans selection:bg-purple-500 selection:text-white pb-12">
@@ -865,59 +918,116 @@ export default function StudentPortal() {
           </div>
         ) : (
           <>
-            {/* PAYMENT STATUS & SLIP BANNER */}
+            {/* FLEXIBLE MONTHLY PAYMENT STATUS & SLIP BANNER */}
             <div className={`p-1 rounded-2xl border bg-gradient-to-r ${
-              slipStatus === 'Approved' ? 'from-emerald-900/40 to-teal-900/20 border-emerald-500/30' : 
-              slipStatus === 'Pending' ? 'from-amber-900/40 to-yellow-900/20 border-amber-500/30' : 
-              slipStatus === 'Rejected' ? 'from-red-900/40 to-rose-900/20 border-red-500/30' :
-              'from-purple-900/40 to-pink-900/20 border-purple-500/30'
+              isFreeCard || isCurrentMonthApproved
+                ? 'from-emerald-900/40 to-teal-900/20 border-emerald-500/30'
+                : hasValidExtension
+                ? 'from-blue-900/40 to-indigo-900/20 border-blue-500/30'
+                : currentMonthSlip?.status === 'Pending'
+                ? 'from-amber-900/40 to-yellow-900/20 border-amber-500/30'
+                : !isUnlocked
+                ? 'from-red-900/40 to-rose-900/20 border-red-500/30'
+                : 'from-purple-900/40 to-pink-900/20 border-purple-500/30'
             }`}>
-              <div className="bg-[#0c1322] rounded-xl p-5 md:p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="bg-[#0c1322] rounded-xl p-5 md:p-6 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <CreditCard className={`w-5 h-5 ${
-                      slipStatus === 'Approved' ? 'text-emerald-400' : 
-                      slipStatus === 'Rejected' ? 'text-red-400' : 'text-purple-400'
+                      isFreeCard || isCurrentMonthApproved ? 'text-emerald-400' : 
+                      !isUnlocked ? 'text-red-400' : 'text-purple-400'
                     }`} />
                     <h3 className="font-bold text-sm text-white">{currentCourse.title} - Class Fees</h3>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                      {formatMonthLabel(currentMonth)}
+                    </span>
                   </div>
                   
-                  {slipStatus === 'Approved' ? (
+                  {isFreeCard ? (
                     <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" /> Payment verified. You now have full access to all lessons.
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Free Card Active — Full access granted to all classes and materials.
                     </div>
-                  ) : slipStatus === 'Pending' ? (
+                  ) : isCurrentMonthApproved ? (
+                    <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Payment verified for {formatMonthLabel(currentMonth)}. Full access active.
+                    </div>
+                  ) : hasValidExtension ? (
+                    <div className="text-xs text-blue-300 bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20 inline-flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 flex-shrink-0 text-blue-400" />
+                      <span>
+                        Teacher Temporary Access granted until <strong>{enrollmentInfo.access_until}</strong>. Please upload your {formatMonthLabel(currentMonth)} slip before that date.
+                      </span>
+                    </div>
+                  ) : currentMonthSlip?.status === 'Pending' ? (
                     <div className="text-xs text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 inline-flex items-center gap-1.5">
-                      <Clock className="w-4 h-4" /> Bank slip uploaded (Pending). Lessons will unlock once your teacher approves it.
+                      <Clock className="w-4 h-4 flex-shrink-0" />
+                      <span>
+                        Bank slip for {formatMonthLabel(currentMonth)} is Pending approval. {isWithinGracePeriod ? 'Grace period access is currently active.' : 'Lessons will unlock once approved.'}
+                      </span>
                     </div>
-                  ) : slipStatus === 'Rejected' ? (
+                  ) : isWithinGracePeriod ? (
+                    <div className="text-xs text-purple-300 bg-purple-500/10 px-3 py-2 rounded-lg border border-purple-500/20 inline-flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 flex-shrink-0 text-purple-400" />
+                      <span>
+                        Grace Period Active (1st–15th): Monthly Fee <strong className="text-emerald-400 font-mono">Rs. {currentCourse.monthly_fee}/-</strong> is due before the <strong>15th</strong> to keep lessons unlocked.
+                      </span>
+                    </div>
+                  ) : currentMonthSlip?.status === 'Rejected' ? (
                     <div className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20 inline-flex items-center gap-1.5">
-                      <XCircle className="w-4 h-4" /> Previous bank slip was rejected. Please upload a valid bank slip (Rs. {currentCourse.monthly_fee}/-) to unlock lessons.
+                      <XCircle className="w-4 h-4 flex-shrink-0" />
+                      <span>
+                        Bank slip for {formatMonthLabel(currentMonth)} was rejected. Please upload a valid slip (Rs. {currentCourse.monthly_fee}/-) to unlock lessons.
+                      </span>
                     </div>
                   ) : (
-                    <div className="text-xs text-slate-300">
-                      Monthly Fee: <strong className="text-emerald-400 font-mono text-sm">Rs. {currentCourse.monthly_fee}/-</strong>. Upload your bank slip photo or PDF below to unlock lessons.
+                    <div className="text-xs text-red-300 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20 inline-flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+                      <span>
+                        Grace period (1st–15th) ended. Upload your bank slip for <strong>{formatMonthLabel(currentMonth)}</strong> (Rs. {currentCourse.monthly_fee}/-) to unlock lessons.
+                      </span>
                     </div>
                   )}
                 </div>
 
-                {slipStatus !== 'Approved' && (
-                  <form onSubmit={handleUploadSlip} className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                {/* Month Selector + Bank Slip Upload Form (Hidden for Free Card holders) */}
+                {!isFreeCard && (
+                  <form onSubmit={handleUploadSlip} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
+                    <select
+                      value={selectedBillingMonth}
+                      onChange={(e) => setSelectedBillingMonth(e.target.value)}
+                      className="bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2.5 text-xs font-semibold text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                    >
+                      {selectableMonths.map((ym) => (
+                        <option key={ym} value={ym}>
+                          {formatMonthLabel(ym)}
+                        </option>
+                      ))}
+                    </select>
+
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      disabled={isUploadingSlip || slipStatus === 'Pending'}
+                      disabled={isUploadingSlip || isSelectedMonthLockedForUpload}
                       onChange={(e) => setSlipFile(e.target.files?.[0] || null)}
-                      className="flex-1 min-w-[240px] bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-600/20 file:text-purple-400 hover:file:bg-purple-600/30 cursor-pointer"
+                      className="flex-1 min-w-[210px] bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 file:mr-2.5 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-600/20 file:text-purple-400 hover:file:bg-purple-600/30 cursor-pointer disabled:opacity-50"
                       required
                     />
+
                     <button
                       type="submit"
-                      disabled={isUploadingSlip || slipStatus === 'Pending' || !slipFile}
-                      className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      disabled={isUploadingSlip || isSelectedMonthLockedForUpload || !slipFile}
+                      className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 flex-shrink-0"
                     >
                       {isUploadingSlip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                      <span>{isUploadingSlip ? 'Uploading...' : 'Submit Slip'}</span>
+                      <span>
+                        {selectedMonthSlip?.status === 'Approved'
+                          ? 'Paid'
+                          : selectedMonthSlip?.status === 'Pending'
+                          ? 'Pending'
+                          : isUploadingSlip
+                          ? 'Uploading...'
+                          : 'Submit Slip'}
+                      </span>
                     </button>
                   </form>
                 )}
@@ -961,7 +1071,7 @@ export default function StudentPortal() {
                     className="px-6 py-3 rounded-2xl font-bold text-xs flex items-center gap-2 bg-slate-800/80 border border-slate-700 text-slate-400 cursor-not-allowed"
                   >
                     <Lock className="w-4 h-4 text-amber-400" />
-                    <span>Locked • Payment Approval Required</span>
+                    <span>Locked • Monthly Payment Required</span>
                   </button>
                 ) : (
                   <button
@@ -1022,7 +1132,7 @@ export default function StudentPortal() {
                             disabled
                             className="w-full py-2 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-not-allowed"
                           >
-                            <Lock className="w-3.5 h-3.5 text-amber-400" /> Locked (Approval Required)
+                            <Lock className="w-3.5 h-3.5 text-amber-400" /> Locked (Payment Required)
                           </button>
                         )}
                       </div>
@@ -1034,7 +1144,7 @@ export default function StudentPortal() {
               {/* Tutes */}
               <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-emerald-400" /> Tutes & Handouts ({materials.length})
+                  <BookOpen className="w-4 h-4 text-emerald-400" /> Tutes &amp; Handouts ({materials.length})
                 </h3>
                 {materials.length === 0 ? (
                   <p className="text-xs text-slate-500">No tutes uploaded yet.</p>
@@ -1048,7 +1158,7 @@ export default function StudentPortal() {
                             <Download className="w-4 h-4" />
                           </a>
                         ) : (
-                          <span title="Payment approval required to download" className="p-2 rounded-lg bg-slate-800 text-slate-500 cursor-not-allowed">
+                          <span title="Monthly payment required to download" className="p-2 rounded-lg bg-slate-800 text-slate-500 cursor-not-allowed">
                             <Lock className="w-4 h-4 text-amber-400" />
                           </span>
                         )}
@@ -1061,7 +1171,7 @@ export default function StudentPortal() {
               {/* Exams & Quizzes */}
               <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4 text-amber-400" /> Exams & Quizzes ({quizzes.length})
+                  <HelpCircle className="w-4 h-4 text-amber-400" /> Exams &amp; Quizzes ({quizzes.length})
                 </h3>
                 {quizzes.length === 0 ? (
                   <p className="text-xs text-slate-500">No exams or quizzes available.</p>
@@ -1147,7 +1257,6 @@ export default function StudentPortal() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 select-none"
         >
           <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl p-4 space-y-3">
-            {/* Modal Top Header */}
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-bold text-xs text-red-400 flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-lg flex-shrink-0">
@@ -1168,27 +1277,23 @@ export default function StudentPortal() {
               </button>
             </div>
 
-            {/* Protected Video Stage + Custom Controls Wrapper */}
             <div
               ref={playerWrapperRef}
               onContextMenu={(e) => e.preventDefault()}
               className="relative bg-black rounded-2xl overflow-hidden border border-slate-800 flex flex-col justify-between"
             >
-              {/* 16:9 YouTube Player Container */}
               <div className="relative w-full pt-[56.25%] bg-black overflow-hidden">
                 <div
                   ref={playerContainerRef}
                   className="absolute inset-0 w-full h-full pointer-events-none scale-[1.02]"
                 />
 
-                {/* INVISIBLE ANTI-SHARE & ANTI-CLICK SHIELD (Blocks right-click, YouTube Share button, and external links) */}
                 <div
                   onClick={handleToggleVideoPlay}
                   onContextMenu={(e) => e.preventDefault()}
                   className="absolute inset-0 z-20 cursor-pointer bg-transparent"
                 />
 
-                {/* DYNAMIC MOVING ANTI-PIRACY STUDENT WATERMARK */}
                 <div
                   style={{ top: watermarkPos.top, left: watermarkPos.left }}
                   className="pointer-events-none select-none absolute z-30 transition-all duration-1000 px-3 py-1 rounded-lg bg-black/35 border border-white/10 text-[11px] font-mono font-bold text-white/40"
@@ -1196,7 +1301,6 @@ export default function StudentPortal() {
                   {studentInfo?.name} • {studentInfo?.indexNo} • {studentInfo?.phone}
                 </div>
 
-                {/* Center Big Play Overlay when paused */}
                 {!isPlaying && isVideoReady && (
                   <button
                     type="button"
@@ -1208,9 +1312,7 @@ export default function StudentPortal() {
                 )}
               </div>
 
-              {/* CUSTOM LMS CONTROL BAR (Replaces YouTube Controls Completely) */}
               <div className="relative z-30 bg-[#070b14] border-t border-slate-800/90 px-4 py-3 space-y-2">
-                {/* Seek / Progress Timeline */}
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] font-mono text-slate-400 w-12 text-right">
                     {formatVideoSeconds(videoCurrentTime)}
@@ -1229,7 +1331,6 @@ export default function StudentPortal() {
                   </span>
                 </div>
 
-                {/* Action Buttons Row */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <button
@@ -1271,7 +1372,6 @@ export default function StudentPortal() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Speed Selector */}
                     <div className="flex items-center gap-1 bg-[#0c1322] border border-slate-800 rounded-xl px-2 py-1">
                       <span className="text-[10px] text-slate-400 font-semibold">Speed:</span>
                       {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
@@ -1290,7 +1390,6 @@ export default function StudentPortal() {
                       ))}
                     </div>
 
-                    {/* Protected Fullscreen Toggle */}
                     <button
                       type="button"
                       onClick={handleToggleProtectedFullscreen}
