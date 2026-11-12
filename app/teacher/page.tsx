@@ -9,8 +9,15 @@ import {
   GraduationCap, ArrowLeft, Loader2, KeyRound, 
   Radio, Share2, Layers, AlertCircle, Smartphone, 
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
-  Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut, Upload
+  Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut, Upload, Clock
 } from 'lucide-react';
+
+interface DraftQuestion {
+  question_text: string;
+  options: string[];
+  correct_option: number;
+  marks: number;
+}
 
 export default function TeacherMasterDashboard() {
   // Teacher Auth States
@@ -75,12 +82,19 @@ export default function TeacherMasterDashboard() {
 
   const [recordingTitle, setRecordingTitle] = useState('');
   const [recordingId, setRecordingId] = useState('');
+
+  // Multi-Question Quiz Builder States
   const [quizTitle, setQuizTitle] = useState('');
   const [quizDuration, setQuizDuration] = useState('20');
+  const [quizQuestionsList, setQuizQuestionsList] = useState<DraftQuestion[]>([]);
   const [qText, setQText] = useState('');
   const [opt0, setOpt0] = useState('');
   const [opt1, setOpt1] = useState('');
+  const [opt2, setOpt2] = useState('');
+  const [opt3, setOpt3] = useState('');
   const [correctOpt, setCorrectOpt] = useState('0');
+  const [qMarks, setQMarks] = useState('10');
+  const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
 
   useEffect(() => {
     const savedAuth = localStorage.getItem('lms_teacher_session');
@@ -199,9 +213,21 @@ export default function TeacherMasterDashboard() {
       alert('Class created successfully!');
       setShowCreateModal(false);
       setNewTitle('');
+      setNewGrade('');
+      setNewFee('');
       fetchCourses();
     }
     setIsSubmittingCourse(false);
+  };
+
+  const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
+    if (!confirm(`Are you sure you want to delete "${courseTitle}"?`)) return;
+    const { error } = await supabase.from('courses').delete().eq('id', courseId);
+    if (!error) {
+      fetchCourses();
+    } else {
+      alert('Error deleting class: ' + error.message);
+    }
   };
 
   const openCourseManager = async (course: any) => {
@@ -223,7 +249,7 @@ export default function TeacherMasterDashboard() {
     const { data: rec } = await supabase.from('recordings').select('*').eq('course_id', courseId).order('uploaded_at', { ascending: false });
     if (rec) setRecordings(rec);
 
-    const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', courseId);
+    const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', courseId).order('created_at', { ascending: false });
     if (qz) setQuizzes(qz);
 
     const { data: slp } = await supabase.from('slips').select('*, students(full_name, index_number, whatsapp_number)').eq('course_id', courseId).order('submitted_at', { ascending: false });
@@ -443,32 +469,115 @@ export default function TeacherMasterDashboard() {
     }
   };
 
+  const handleDeleteMaterial = async (materialId: string) => {
+    if (!confirm('Are you sure you want to remove this tute?')) return;
+    await supabase.from('materials').delete().eq('id', materialId);
+    if (selectedCourse) loadCourseDetails(selectedCourse.id);
+  };
+
+  // Multi-Question Quiz Builder Handlers
+  const handleAddQuestionToList = () => {
+    if (!qText.trim() || !opt0.trim() || !opt1.trim() || !opt2.trim() || !opt3.trim()) {
+      alert('Please enter the question text and all 4 answer options.');
+      return;
+    }
+
+    const newQuestion: DraftQuestion = {
+      question_text: qText.trim(),
+      options: [opt0.trim(), opt1.trim(), opt2.trim(), opt3.trim()],
+      correct_option: Number(correctOpt),
+      marks: Number(qMarks) || 10
+    };
+
+    setQuizQuestionsList((prev) => [...prev, newQuestion]);
+    setQText('');
+    setOpt0('');
+    setOpt1('');
+    setOpt2('');
+    setOpt3('');
+    setCorrectOpt('0');
+  };
+
+  const handleRemoveDraftQuestion = (indexToRemove: number) => {
+    setQuizQuestionsList((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
   const handleCreateQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quizTitle || !selectedCourse) return;
-    const { data: qz } = await supabase.from('quizzes').insert([{
-      course_id: selectedCourse.id,
-      title: quizTitle,
-      duration_minutes: Number(quizDuration) || 20,
-      enable_watermark: true,
-      total_marks: 100
-    }]).select().single();
+    if (!quizTitle.trim() || !selectedCourse) return;
 
-    if (qz && qText && opt0 && opt1) {
-      await supabase.from('quiz_questions').insert([{
-        quiz_id: qz.id,
-        question_text: qText,
-        options: [opt0, opt1, 'None', 'None'],
+    const finalQuestions: DraftQuestion[] = [...quizQuestionsList];
+
+    // If teacher typed a question in the inputs and clicked Publish directly, include it automatically
+    if (qText.trim() && opt0.trim() && opt1.trim() && opt2.trim() && opt3.trim()) {
+      finalQuestions.push({
+        question_text: qText.trim(),
+        options: [opt0.trim(), opt1.trim(), opt2.trim(), opt3.trim()],
         correct_option: Number(correctOpt),
-        marks: 100
-      }]);
+        marks: Number(qMarks) || 10
+      });
+    }
+
+    if (finalQuestions.length === 0) {
+      alert('Please add at least one complete question with 4 options before publishing.');
+      return;
+    }
+
+    setIsPublishingQuiz(true);
+    try {
+      const calculatedTotalMarks = finalQuestions.reduce((sum, item) => sum + (item.marks || 10), 0);
+
+      const { data: qz, error: qzErr } = await supabase.from('quizzes').insert([{
+        course_id: selectedCourse.id,
+        title: quizTitle.trim(),
+        duration_minutes: Number(quizDuration) || 20,
+        enable_watermark: true,
+        total_marks: calculatedTotalMarks
+      }]).select().single();
+
+      if (qzErr || !qz) {
+        throw new Error(qzErr?.message || 'Failed to create quiz.');
+      }
+
+      const questionRows = finalQuestions.map((item) => ({
+        quiz_id: qz.id,
+        question_text: item.question_text,
+        options: item.options,
+        correct_option: item.correct_option,
+        marks: item.marks
+      }));
+
+      const { error: qInsertErr } = await supabase.from('quiz_questions').insert(questionRows);
+      if (qInsertErr) {
+        throw new Error(qInsertErr.message);
+      }
+
       setQuizTitle('');
+      setQuizDuration('20');
+      setQuizQuestionsList([]);
       setQText('');
       setOpt0('');
       setOpt1('');
-      loadCourseDetails(selectedCourse.id);
-      alert('Quiz published successfully!');
+      setOpt2('');
+      setOpt3('');
+      setCorrectOpt('0');
+      setQMarks('10');
+
+      await loadCourseDetails(selectedCourse.id);
+      alert(`Quiz published successfully with ${finalQuestions.length} question(s)!`);
+    } catch (err: any) {
+      alert('Quiz Error: ' + err.message);
+    } finally {
+      setIsPublishingQuiz(false);
     }
+  };
+
+  const handleDeleteQuiz = async (quizId: string) => {
+    if (!confirm('Are you sure you want to delete this quiz and all its questions?')) return;
+    await supabase.from('quiz_questions').delete().eq('quiz_id', quizId);
+    await supabase.from('quiz_submissions').delete().eq('quiz_id', quizId);
+    await supabase.from('quizzes').delete().eq('id', quizId);
+    if (selectedCourse) loadCourseDetails(selectedCourse.id);
   };
 
   const handleUpdateSlipStatus = async (slipId: string, status: 'Approved' | 'Rejected') => {
@@ -706,12 +815,21 @@ export default function TeacherMasterDashboard() {
                       <span className="text-xs font-mono font-bold text-emerald-400">Rs. {c.monthly_fee}/-</span>
                     </div>
                     <h3 className="text-base font-bold text-white line-clamp-1">{c.title}</h3>
-                    <button
-                      onClick={() => openCourseManager(c)}
-                      className="w-full py-2.5 bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Settings className="w-3.5 h-3.5" /> Manage Class Hub
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openCourseManager(c)}
+                        className="flex-1 py-2.5 bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Settings className="w-3.5 h-3.5" /> Manage Class Hub
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCourse(c.id, c.title)}
+                        title="Delete Class"
+                        className="p-2.5 bg-slate-800/80 hover:bg-red-600/20 text-slate-400 hover:text-red-400 rounded-xl transition cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -773,16 +891,16 @@ export default function TeacherMasterDashboard() {
                   activeTab === 'content' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <BookOpen className="w-4 h-4" /> Tutes & Notes
+                <BookOpen className="w-4 h-4" /> Tutes & Notes ({materials.length})
               </button>
 
               <button
                 onClick={() => setActiveTab('quizzes')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
-                  activeTab === 'quizzes' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                  activeTab === 'quizzes' ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <HelpCircle className="w-4 h-4" /> Timed Quizzes
+                <HelpCircle className="w-4 h-4" /> Timed Quizzes ({quizzes.length})
               </button>
             </div>
 
@@ -1007,7 +1125,9 @@ export default function TeacherMasterDashboard() {
                               <span className="text-[10px] text-slate-400 font-mono">ID: {slp.students?.index_number}</span>
                             </div>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                              slp.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              slp.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                              slp.status === 'Rejected' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                              'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                             }`}>
                               {slp.status}
                             </span>
@@ -1117,7 +1237,7 @@ export default function TeacherMasterDashboard() {
             {/* TAB 4: TUTES */}
             {activeTab === 'content' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <form onSubmit={handleAddMaterial} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
+                <form onSubmit={handleAddMaterial} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
                   <h3 className="font-bold text-sm text-white">Upload New Tute / PDF</h3>
                   <div>
                     <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Tute Title</label>
@@ -1152,9 +1272,18 @@ export default function TeacherMasterDashboard() {
                     <p className="text-xs text-slate-500 py-6 text-center">No tutes uploaded yet.</p>
                   ) : (
                     materials.map(m => (
-                      <div key={m.id} className="p-3 bg-[#131c31] border border-slate-700/50 rounded-xl flex items-center justify-between">
+                      <div key={m.id} className="p-3 bg-[#131c31] border border-slate-700/50 rounded-xl flex items-center justify-between gap-3">
                         <span className="text-xs text-white font-medium truncate">{m.title}</span>
-                        <a href={m.file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">Download ➔</a>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <a href={m.file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">Download ➔</a>
+                          <button
+                            onClick={() => handleDeleteMaterial(m.id)}
+                            title="Delete Tute"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -1162,26 +1291,200 @@ export default function TeacherMasterDashboard() {
               </div>
             )}
 
-            {/* TAB 5: QUIZZES */}
+            {/* TAB 5: MULTI-QUESTION TIMED QUIZZES */}
             {activeTab === 'quizzes' && (
-              <form onSubmit={handleCreateQuiz} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
-                <h3 className="font-bold text-sm text-white">Create Anti-Cheat Timed Quiz</h3>
-                <input
-                  type="text" placeholder="Quiz Title" value={quizTitle} onChange={(e) => setQuizTitle(e.target.value)}
-                  className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
-                />
-                <input
-                  type="text" placeholder="Question Text" value={qText} onChange={(e) => setQText(e.target.value)}
-                  className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Option 1" value={opt0} onChange={(e) => setOpt0(e.target.value)} className="bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
-                  <input type="text" placeholder="Option 2" value={opt1} onChange={(e) => setOpt1(e.target.value)} className="bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column: Multi-Question Quiz Builder */}
+                <form onSubmit={handleCreateQuiz} className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-5 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <HelpCircle className="w-5 h-5 text-amber-400" />
+                      <h3 className="font-bold text-sm text-white">Create Anti-Cheat Timed Quiz</h3>
+                    </div>
+                    <span className="text-[11px] font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                      {quizQuestionsList.length} Question(s) Added
+                    </span>
+                  </div>
+
+                  {/* Quiz Meta: Title & Duration */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Quiz / Exam Title</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Unit 01 Online MCQ Test"
+                        value={quizTitle}
+                        onChange={(e) => setQuizTitle(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Duration (Minutes)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="20"
+                        value={quizDuration}
+                        onChange={(e) => setQuizDuration(e.target.value)}
+                        className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Question Editor Box */}
+                  <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-200">Add Question #{quizQuestionsList.length + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400">Marks:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={qMarks}
+                          onChange={(e) => setQMarks(e.target.value)}
+                          className="w-16 bg-[#0c1322] border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center"
+                        />
+                      </div>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Enter question text..."
+                      value={qText}
+                      onChange={(e) => setQText(e.target.value)}
+                      className="w-full bg-[#0c1322] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
+                    />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <input
+                        type="text"
+                        placeholder="Option 1"
+                        value={opt0}
+                        onChange={(e) => setOpt0(e.target.value)}
+                        className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Option 2"
+                        value={opt1}
+                        onChange={(e) => setOpt1(e.target.value)}
+                        className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Option 3"
+                        value={opt2}
+                        onChange={(e) => setOpt2(e.target.value)}
+                        className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Option 4"
+                        value={opt3}
+                        onChange={(e) => setOpt3(e.target.value)}
+                        className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-semibold text-emerald-400">Correct Answer:</label>
+                        <select
+                          value={correctOpt}
+                          onChange={(e) => setCorrectOpt(e.target.value)}
+                          className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="0">Option 1</option>
+                          <option value="1">Option 2</option>
+                          <option value="2">Option 3</option>
+                          <option value="3">Option 4</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleAddQuestionToList}
+                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-purple-600 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Question to Quiz
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Added Questions Preview List */}
+                  {quizQuestionsList.length > 0 && (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      <span className="text-[11px] font-bold text-slate-400 block">Questions Queue ({quizQuestionsList.length}):</span>
+                      {quizQuestionsList.map((item, idx) => (
+                        <div key={idx} className="p-3 rounded-xl bg-[#131c31] border border-slate-700/60 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">
+                              {idx + 1}. {item.question_text}
+                            </p>
+                            <span className="text-[10px] text-emerald-400 font-mono">
+                              Correct: Option {item.correct_option + 1} ({item.options[item.correct_option]}) • {item.marks} Marks
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDraftQuestion(idx)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 transition cursor-pointer flex-shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isPublishingQuiz}
+                    className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-amber-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isPublishingQuiz ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    <span>{isPublishingQuiz ? 'Publishing Quiz...' : 'Save Quiz & Publish'}</span>
+                  </button>
+                </form>
+
+                {/* Right Column: Published Quizzes List */}
+                <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
+                  <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-400" /> Published Quizzes ({quizzes.length})
+                  </h3>
+
+                  {quizzes.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-8 text-center">No quizzes published yet.</p>
+                  ) : (
+                    <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                      {quizzes.map((qz) => (
+                        <div key={qz.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="font-bold text-xs text-white line-clamp-2">{qz.title}</h4>
+                            <button
+                              onClick={() => handleDeleteQuiz(qz.id)}
+                              title="Delete Quiz"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 transition cursor-pointer flex-shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-400" /> {qz.duration_minutes} Mins
+                            </span>
+                            <span className="text-emerald-400">
+                              Total: {qz.total_marks || 100} Marks
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <button type="submit" className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
-                  Save Quiz & Publish
-                </button>
-              </form>
+              </div>
             )}
 
           </div>
