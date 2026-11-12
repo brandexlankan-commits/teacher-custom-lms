@@ -1,14 +1,70 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { 
   GraduationCap, Video, BookOpen, Clock, 
   HelpCircle, CheckCircle2, XCircle, Award, 
-  ArrowLeft, Download, ShieldCheck, PlaySquare, 
+  Download, ShieldCheck, PlaySquare, 
   Lock, X, CreditCard, AlertCircle, LogOut, KeyRound, Smartphone, Upload, Loader2
 } from 'lucide-react';
+
+// Deterministic Hardware + Browser Fingerprint Generator
+function generateHardwareFingerprint(): string {
+  if (typeof window === 'undefined') return 'DEV-SSR';
+
+  try {
+    const components: string[] = [
+      navigator.userAgent || '',
+      navigator.language || '',
+      `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`,
+      Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      String(navigator.hardwareConcurrency || 0),
+      String((navigator as any).deviceMemory || 0),
+      navigator.platform || ''
+    ];
+
+    // Canvas Graphics Signature for Hardware Differentiation
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      canvas.width = 240;
+      canvas.height = 40;
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#6b21a8';
+      ctx.fillRect(10, 5, 80, 20);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('SmartTuitionLMS-Sec', 14, 8);
+      components.push(canvas.toDataURL());
+    }
+
+    const raw = components.join('||');
+    let hash1 = 5381;
+    let hash2 = 52711;
+    for (let i = 0; i < raw.length; i++) {
+      const char = raw.charCodeAt(i);
+      hash1 = (hash1 * 33) ^ char;
+      hash2 = (hash2 * 33) ^ char;
+    }
+
+    const fingerprint =
+      'DEV-' +
+      (hash1 >>> 0).toString(16).toUpperCase().padStart(8, '0') +
+      '-' +
+      (hash2 >>> 0).toString(16).toUpperCase().padStart(8, '0');
+
+    localStorage.setItem('lms_device_token', fingerprint);
+    return fingerprint;
+  } catch {
+    let fallback = localStorage.getItem('lms_device_token');
+    if (!fallback) {
+      fallback = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+      localStorage.setItem('lms_device_token', fallback);
+    }
+    return fallback;
+  }
+}
 
 export default function StudentPortal() {
   const [studentInfo, setStudentInfo] = useState<any | null>(null);
@@ -49,67 +105,47 @@ export default function StudentPortal() {
     // Check local session
     const savedStudent = localStorage.getItem('lms_student_session');
     if (savedStudent) {
-      const parsed = JSON.parse(savedStudent);
-      verifyAndLoadStudent(parsed.id);
+      try {
+        const parsed = JSON.parse(savedStudent);
+        verifyAndLoadStudent(parsed.id);
+      } catch {
+        localStorage.removeItem('lms_student_session');
+        setLoading(false);
+      }
     } else {
       setLoading(false);
     }
   }, []);
 
-  // Browser Device Token
-  const getDeviceFingerprint = () => {
-    let dId = localStorage.getItem('lms_device_token');
-    if (!dId) {
-      dId = 'DEV-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now().toString(36);
-      localStorage.setItem('lms_device_token', dId);
-    }
-    return dId;
-  };
-
-  // Student Login Handler with 1-Device Lock
+  // Student Login Handler via Secure Server API + Hardware 1-Device Lock
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setIsLoggingIn(true);
 
     try {
-      // Search student by Index No or Phone Number
-      const { data: stu, error } = await supabase
-        .from('students')
-        .select('*')
-        .or(`index_number.eq.${loginIdentifier.trim()},whatsapp_number.eq.${loginIdentifier.trim()}`)
-        .limit(1)
-        .maybeSingle();
+      const currentDeviceId = generateHardwareFingerprint();
 
-      if (error || !stu) {
-        setLoginError('Invalid Index Number or WhatsApp Number.');
-        setIsLoggingIn(false);
-        return;
-      }
+      const res = await fetch('/api/student-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: loginIdentifier.trim(),
+          password: loginPassword.trim(),
+          deviceFingerprint: currentDeviceId
+        })
+      });
 
-      // Password Verification (default '123456' or student phone)
-      const validPassword = stu.password || stu.whatsapp_number || '123456';
-      if (loginPassword.trim() !== validPassword) {
-        setLoginError('Incorrect Password.');
-        setIsLoggingIn(false);
-        return;
-      }
-
-      // 1-Device Lock Verification
-      const currentDeviceId = getDeviceFingerprint();
-
-      if (!stu.device_id) {
-        // Lock account to the first device used to log in
-        await supabase.from('students').update({ device_id: currentDeviceId }).eq('id', stu.id);
-      } else if (stu.device_id !== currentDeviceId) {
-        setLoginError('⚠️ Your account is already linked to another phone or computer. Please contact your teacher to unlock your device before logging in from a new device.');
+      const data = await res.json();
+      if (!res.ok) {
+        setLoginError(data.error || 'Login failed. Please check your credentials.');
         setIsLoggingIn(false);
         return;
       }
 
       // Save Session
-      localStorage.setItem('lms_student_session', JSON.stringify(stu));
-      await verifyAndLoadStudent(stu.id);
+      localStorage.setItem('lms_student_session', JSON.stringify(data.student));
+      await verifyAndLoadStudent(data.student.id);
     } catch (err: any) {
       setLoginError('Login Error: ' + err.message);
     } finally {
@@ -128,6 +164,18 @@ export default function StudentPortal() {
     const { data: stu } = await supabase.from('students').select('*').eq('id', studentId).maybeSingle();
     if (!stu) {
       handleLogout();
+      setLoading(false);
+      return;
+    }
+
+    // Re-verify 1-Device Lock on session restore
+    const currentDeviceId = generateHardwareFingerprint();
+    if (!stu.device_id) {
+      // Teacher unlocked the device; bind to current verified device
+      await supabase.from('students').update({ device_id: currentDeviceId }).eq('id', stu.id);
+    } else if (stu.device_id !== currentDeviceId) {
+      handleLogout();
+      setLoginError('⚠️ Your account is locked to a different device. Please contact your teacher to unlock your device.');
       setLoading(false);
       return;
     }
@@ -362,7 +410,7 @@ export default function StudentPortal() {
 
           <div className="pt-2 text-center border-t border-slate-800">
             <span className="text-[11px] text-slate-500 flex items-center justify-center gap-1">
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Single Device Security Active
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Hardware 1-Device Security Active
             </span>
           </div>
         </div>
