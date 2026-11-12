@@ -85,8 +85,14 @@ export default function StudentPortal() {
   const [recordings, setRecordings] = useState<any[]>([]);
   const [activeQuiz, setActiveQuiz] = useState<any | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
-  const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+
+  // Secure Zoom Join & Verified Attendance States
+  const [isJoiningZoom, setIsJoiningZoom] = useState(false);
+  const [activeAttendanceId, setActiveAttendanceId] = useState<string | null>(null);
+  const [verifiedStayMinutes, setVerifiedStayMinutes] = useState<number>(0);
+  const [minRequiredMinutes, setMinRequiredMinutes] = useState<number>(30);
+  const [attendanceStatus, setAttendanceStatus] = useState<string | null>(null);
 
   // Bank Slip File Upload States
   const [slipFile, setSlipFile] = useState<File | null>(null);
@@ -209,6 +215,9 @@ export default function StudentPortal() {
         .limit(1)
         .maybeSingle();
       setActiveMeeting(mtg);
+      if (mtg?.min_attendance_minutes) {
+        setMinRequiredMinutes(mtg.min_attendance_minutes);
+      }
 
       const { data: mat } = await supabase.from('materials').select('*').eq('course_id', course.id);
       const { data: qz } = await supabase.from('quizzes').select('*').eq('course_id', course.id).order('created_at', { ascending: false });
@@ -228,10 +237,59 @@ export default function StudentPortal() {
         });
         setMySubmissionsMap(subMap);
       }
+
+      // Restore today's active attendance session if already joined
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { data: todayAtt } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('student_id', stu.id)
+        .eq('course_id', course.id)
+        .gte('marked_at', todayStart.toISOString())
+        .order('marked_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (todayAtt) {
+        setActiveAttendanceId(todayAtt.id);
+        setVerifiedStayMinutes(todayAtt.verified_minutes || 0);
+        setAttendanceStatus(todayAtt.status);
+      }
     }
 
     setLoading(false);
   };
+
+  // Periodic Attendance Verification Heartbeat (marks Present only after minimum required stay duration)
+  useEffect(() => {
+    if (!activeAttendanceId || !studentInfo || !currentCourse || attendanceStatus === 'Present') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/zoom/attendance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attendanceId: activeAttendanceId,
+            studentId: studentInfo.id,
+            courseId: currentCourse.id
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setVerifiedStayMinutes(data.verifiedMinutes || 0);
+          setMinRequiredMinutes(data.minRequiredMinutes || 30);
+          setAttendanceStatus(data.status);
+        }
+      } catch {
+        // Ignore transient network hiccup
+      }
+    }, 60000); // Check every 60 seconds
+
+    return () => clearInterval(interval);
+  }, [activeAttendanceId, studentInfo, currentCourse, attendanceStatus]);
 
   const handleJoinClass = async () => {
     if (!isUnlocked) {
@@ -239,23 +297,40 @@ export default function StudentPortal() {
       return;
     }
 
-    const zoomLink = activeMeeting?.join_url || currentCourse?.zoom_link;
-    if (!zoomLink) {
-      alert('A Zoom meeting has not been started for this class yet.');
-      return;
-    }
+    if (!studentInfo || !currentCourse) return;
+    setIsJoiningZoom(true);
 
-    if (studentInfo && currentCourse) {
-      await supabase.from('attendance').insert([{
-        student_id: studentInfo.id,
-        course_id: currentCourse.id,
-        duration_minutes: activeMeeting?.duration_minutes || 120,
-        status: 'Present'
-      }]);
-      setAttendanceMarked(true);
-    }
+    try {
+      const currentDeviceId = generateHardwareFingerprint();
 
-    window.open(zoomLink, '_blank');
+      const res = await fetch('/api/zoom/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: studentInfo.id,
+          courseId: currentCourse.id,
+          deviceFingerprint: currentDeviceId
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Unable to join live class.');
+        setIsJoiningZoom(false);
+        return;
+      }
+
+      setActiveAttendanceId(data.attendanceId);
+      setVerifiedStayMinutes(data.verifiedMinutes || 0);
+      setMinRequiredMinutes(data.minRequiredMinutes || 30);
+      setAttendanceStatus(data.status || 'Joined (Verifying)');
+
+      window.open(data.joinUrl, '_blank');
+    } catch (err: any) {
+      alert('Zoom Join Error: ' + err.message);
+    } finally {
+      setIsJoiningZoom(false);
+    }
   };
 
   const handleUploadSlip = async (e: React.FormEvent) => {
@@ -316,7 +391,6 @@ export default function StudentPortal() {
     const { data: qData } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quiz.id).order('id', { ascending: true });
     if (qData && qData.length > 0) {
       let preparedQuestions = [...qData];
-      // Shuffle question order for Online Exams to prevent side-by-side cheating
       if (quiz.assessment_type === 'Online Exam') {
         preparedQuestions = preparedQuestions.sort(() => Math.random() - 0.5);
       }
@@ -333,7 +407,6 @@ export default function StudentPortal() {
       setTabStrikes(0);
       setCheatAlertMsg(null);
 
-      // Request fullscreen for Online Exams if supported
       if (quiz.assessment_type === 'Online Exam' && document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
       }
@@ -342,7 +415,6 @@ export default function StudentPortal() {
     }
   };
 
-  // Timer Effect: Supports both Whole Exam Timer & Per-Question Auto-Advancing Timer
   useEffect(() => {
     if (!activeQuiz || quizSubmitted) return;
 
@@ -352,7 +424,6 @@ export default function StudentPortal() {
       if (isPerQuestion) {
         setQuestionTimeLeft((prev) => {
           if (prev <= 1) {
-            // Auto-advance to next question or auto-submit on last question
             setCurrentQuestionIdx((currIdx) => {
               if (currIdx + 1 < questions.length) {
                 setQuestionTimeLeft(activeQuiz.per_question_seconds || 60);
@@ -382,7 +453,6 @@ export default function StudentPortal() {
     return () => clearInterval(timer);
   }, [activeQuiz, quizSubmitted, questions.length, tabStrikes]);
 
-  // Anti-Cheat Tab-Switch & Copy/Paste Guard during active Exam/Quiz
   useEffect(() => {
     if (!activeQuiz || quizSubmitted) return;
 
@@ -664,7 +734,7 @@ export default function StudentPortal() {
               </div>
             </div>
 
-            {/* LIVE ZOOM CLASS SECTION */}
+            {/* LIVE ZOOM CLASS SECTION (ANTI-LINK-SHARING + VERIFIED STAY ATTENDANCE) */}
             <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
@@ -676,8 +746,8 @@ export default function StudentPortal() {
                   </h2>
                   <p className="text-xs text-slate-400">
                     {activeMeeting 
-                      ? `Scheduled Duration: ${activeMeeting.duration_minutes} minutes. Click Join Class to connect live and mark your attendance.`
-                      : 'Once the Zoom session is ready, click Join Class to connect.'}
+                      ? `Scheduled Duration: ${activeMeeting.duration_minutes} mins • Minimum stay required for Present mark: ${minRequiredMinutes} mins.`
+                      : 'Once the Zoom session is ready, click Join Class to connect with your personal verified entry.'}
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
@@ -686,9 +756,11 @@ export default function StudentPortal() {
               </div>
 
               {activeMeeting && isUnlocked && (
-                <div className="flex items-center gap-4 text-xs font-mono text-slate-400 bg-[#070b14] p-3 rounded-xl border border-slate-800/60 w-fit">
-                  <span>Meeting ID: <strong className="text-white">{activeMeeting.meeting_id || 'Direct'}</strong></span>
-                  <span>Passcode: <strong className="text-emerald-400">{activeMeeting.password || 'None'}</strong></span>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 bg-[#070b14] p-3 rounded-xl border border-slate-800/60 w-fit">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>
+                    Personal Single-User Zoom Access • Display Name Locked to <strong className="text-purple-400 font-mono">[{studentInfo?.indexNo}]</strong>
+                  </span>
                 </div>
               )}
 
@@ -704,21 +776,28 @@ export default function StudentPortal() {
                 ) : (
                   <button
                     onClick={handleJoinClass}
-                    disabled={!activeMeeting?.join_url && !currentCourse.zoom_link}
+                    disabled={isJoiningZoom || (!activeMeeting?.join_url && !currentCourse.zoom_link)}
                     className={`px-6 py-3 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg transition ${
                       activeMeeting?.join_url || currentCourse.zoom_link 
                         ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30 cursor-pointer' 
                         : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    <Video className="w-4 h-4" />
-                    <span>Join Live Class (Marks Attendance)</span>
+                    {isJoiningZoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
+                    <span>{isJoiningZoom ? 'Generating Personal Entry...' : 'Join Live Class (Protected Entry)'}</span>
                   </button>
                 )}
 
-                {attendanceMarked && isUnlocked && (
+                {attendanceStatus === 'Present' && isUnlocked && (
                   <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-3 py-2 rounded-xl border border-emerald-500/20">
-                    <CheckCircle2 className="w-4 h-4" /> Attendance Marked!
+                    <CheckCircle2 className="w-4 h-4" /> Attendance Verified ({verifiedStayMinutes}m)!
+                  </span>
+                )}
+
+                {attendanceStatus && attendanceStatus !== 'Present' && isUnlocked && (
+                  <span className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/20">
+                    <Clock className="w-4 h-4 animate-pulse" />
+                    Verifying Attendance: {verifiedStayMinutes} / {minRequiredMinutes} mins completed (Keep this tab open during class)
                   </span>
                 )}
               </div>
@@ -895,7 +974,6 @@ export default function StudentPortal() {
       {activeQuiz && isUnlocked && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 overflow-y-auto select-none">
           <div className="bg-[#0c1322] border border-slate-800 text-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative">
-            {/* Dynamic Anti-Cheat Watermark */}
             {activeQuiz.enable_watermark && (
               <div className="pointer-events-none select-none fixed inset-0 z-20 flex items-center justify-center overflow-hidden opacity-[0.05] rotate-[-25deg]">
                 <div className="text-center font-mono font-black text-2xl text-white space-y-12">
@@ -906,7 +984,6 @@ export default function StudentPortal() {
               </div>
             )}
 
-            {/* Sticky Top Bar */}
             <div className="sticky top-0 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800/80 px-6 py-4 flex items-center justify-between z-30">
               <div>
                 <div className="flex items-center gap-2">
@@ -950,7 +1027,6 @@ export default function StudentPortal() {
             </div>
 
             <div className="p-6 space-y-6 relative z-10">
-              {/* Anti-Cheat Strike Warning Banner */}
               {cheatAlertMsg && !quizSubmitted && (
                 <div className="p-4 rounded-2xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs flex items-center gap-2.5 animate-pulse">
                   <ShieldAlert className="w-5 h-5 text-red-400 flex-shrink-0" />
@@ -958,7 +1034,6 @@ export default function StudentPortal() {
                 </div>
               )}
 
-              {/* Result Summary after submission */}
               {quizSubmitted && (
                 <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/40 p-6 rounded-2xl text-center space-y-2">
                   <Award className="w-12 h-12 text-yellow-400 mx-auto" />
@@ -972,7 +1047,6 @@ export default function StudentPortal() {
                 </div>
               )}
 
-              {/* MODE A: PER-QUESTION TIMED VIEW (Before Submission) */}
               {!quizSubmitted && activeQuiz.timer_mode === 'per_question' && questions[currentQuestionIdx] && (() => {
                 const q = questions[currentQuestionIdx];
                 const studentAns = selectedAnswers[q.id];
@@ -1039,7 +1113,6 @@ export default function StudentPortal() {
                 );
               })()}
 
-              {/* MODE B: WHOLE EXAM VIEW OR POST-SUBMISSION REVIEW */}
               {(quizSubmitted || activeQuiz.timer_mode !== 'per_question') && (
                 <>
                   <div className="space-y-4">

@@ -10,7 +10,8 @@ import {
   Radio, Share2, Layers, AlertCircle, Smartphone, 
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
   Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut, Upload, Clock,
-  ShieldAlert, MessageSquare, ChevronDown, ChevronUp, Edit3
+  ShieldAlert, MessageSquare, ChevronDown, ChevronUp, Edit3, RefreshCw,
+  TrendingUp, TrendingDown, Minus, Printer
 } from 'lucide-react';
 
 interface DraftQuestion {
@@ -70,7 +71,9 @@ export default function TeacherMasterDashboard() {
   // Zoom Meeting Creator inside Course Hub
   const [meetingTopic, setMeetingTopic] = useState('');
   const [meetingDuration, setMeetingDuration] = useState('120');
+  const [minAttendanceMins, setMinAttendanceMins] = useState('30');
   const [isCreatingMeeting, setIsCreatingMeeting] = useState(false);
+  const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
   const [activeMeeting, setActiveMeeting] = useState<any | null>(null);
 
   // Course Specific Data
@@ -273,7 +276,7 @@ export default function TeacherMasterDashboard() {
     if (slp) setSlips(slp);
   };
 
-  // Student Performance Report Viewer Logic
+  // Student Performance Report Viewer Logic (with Class Names & Month-over-Month Analytics)
   const handleOpenStudentReport = async (student: any) => {
     setSelectedStudentForReport(student);
     setExpandedSubmissionId(null);
@@ -299,10 +302,10 @@ export default function TeacherMasterDashboard() {
         setScoreInputs(initialScores);
       }
 
-      // 2. Fetch Attendance Logs for this student
+      // 2. Fetch Attendance Logs with Course Names
       const { data: attLogs } = await supabase
         .from('attendance')
-        .select('*')
+        .select('*, courses(title)')
         .eq('student_id', student.id)
         .order('marked_at', { ascending: false });
 
@@ -312,6 +315,294 @@ export default function TeacherMasterDashboard() {
     } finally {
       setLoadingReport(false);
     }
+  };
+
+  // Compute Month-over-Month Progress Metrics for Parent Report
+  const getProgressAnalytics = () => {
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+
+    const lastMonthDate = new Date(thisYear, thisMonth - 1, 1);
+    const lastMonth = lastMonthDate.getMonth();
+    const lastMonthYear = lastMonthDate.getFullYear();
+
+    const isSameMonthYear = (dateStr: string, m: number, y: number) => {
+      const d = new Date(dateStr);
+      return d.getMonth() === m && d.getFullYear() === y;
+    };
+
+    // Verified Attendance counts ('Present' only, excluding incomplete early leaves)
+    const verifiedAttendance = studentAttendanceLogs.filter(
+      (a) => a.status === 'Present' || !String(a.status || '').startsWith('Joined')
+    );
+
+    const thisMonthAtt = verifiedAttendance.filter((a) => isSameMonthYear(a.marked_at, thisMonth, thisYear)).length;
+    const lastMonthAtt = verifiedAttendance.filter((a) => isSameMonthYear(a.marked_at, lastMonth, lastMonthYear)).length;
+    const attDiff = thisMonthAtt - lastMonthAtt;
+
+    // Exam & Quiz Percentage Averages
+    const calcPct = (sub: any) => {
+      const total = Number(sub.quizzes?.total_marks || 100);
+      return total > 0 ? Math.round((Number(sub.score || 0) / total) * 100) : 0;
+    };
+
+    const thisMonthQuizzes = studentQuizResults.filter((q) => isSameMonthYear(q.submitted_at, thisMonth, thisYear));
+    const lastMonthQuizzes = studentQuizResults.filter((q) => isSameMonthYear(q.submitted_at, lastMonth, lastMonthYear));
+
+    const thisMonthAvg =
+      thisMonthQuizzes.length > 0
+        ? Math.round(thisMonthQuizzes.reduce((acc, q) => acc + calcPct(q), 0) / thisMonthQuizzes.length)
+        : 0;
+
+    const lastMonthAvg =
+      lastMonthQuizzes.length > 0
+        ? Math.round(lastMonthQuizzes.reduce((acc, q) => acc + calcPct(q), 0) / lastMonthQuizzes.length)
+        : 0;
+
+    const scoreDiff = thisMonthAvg - lastMonthAvg;
+
+    const overallAvg =
+      studentQuizResults.length > 0
+        ? Math.round(studentQuizResults.reduce((acc, q) => acc + calcPct(q), 0) / studentQuizResults.length)
+        : 0;
+
+    const thisMonthLabel = now.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    const lastMonthLabel = lastMonthDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+
+    return {
+      thisMonthLabel,
+      lastMonthLabel,
+      thisMonthAtt,
+      lastMonthAtt,
+      attDiff,
+      thisMonthAvg,
+      lastMonthAvg,
+      scoreDiff,
+      overallAvg,
+      verifiedAttendanceCount: verifiedAttendance.length,
+      chronologicalQuizzes: [...studentQuizResults].reverse().slice(-8)
+    };
+  };
+
+  // Generate Clean A4 Printable / Save-as-PDF Parent Progress Report
+  const handlePrintParentReport = () => {
+    if (!selectedStudentForReport) return;
+    const analytics = getProgressAnalytics();
+    const stu = selectedStudentForReport;
+    const courseTitle = selectedCourse?.title || 'Tuition Class';
+    const reportDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const examRowsHtml =
+      studentQuizResults.length === 0
+        ? `<tr><td colspan="5" style="text-align:center;color:#64748b;padding:14px;">No exams or quizzes attempted yet.</td></tr>`
+        : studentQuizResults
+            .map((res) => {
+              const total = Number(res.quizzes?.total_marks || 100);
+              const pct = total > 0 ? Math.round((Number(res.score || 0) / total) * 100) : 0;
+              return `
+                <tr>
+                  <td><strong>${res.quizzes?.title || 'Online Exam'}</strong><br/><span style="font-size:10px;color:#64748b;">${res.quizzes?.assessment_type || 'Quiz'}</span></td>
+                  <td>${new Date(res.submitted_at).toLocaleDateString()}</td>
+                  <td><strong>${res.score} / ${total}</strong></td>
+                  <td><span class="badge ${pct >= 75 ? 'badge-green' : pct >= 50 ? 'badge-blue' : 'badge-amber'}">${pct}%</span></td>
+                  <td>${res.teacher_feedback || '-'}</td>
+                </tr>
+              `;
+            })
+            .join('');
+
+    const attRowsHtml =
+      studentAttendanceLogs.length === 0
+        ? `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:14px;">No attendance logs recorded yet.</td></tr>`
+        : studentAttendanceLogs
+            .map(
+              (att) => `
+              <tr>
+                <td><strong>${att.courses?.title || courseTitle}</strong></td>
+                <td>${new Date(att.marked_at).toLocaleDateString()}</td>
+                <td>${att.verified_minutes || att.duration_minutes || 0} mins</td>
+                <td><span class="badge ${att.status === 'Present' ? 'badge-green' : 'badge-amber'}">${att.status}</span></td>
+              </tr>
+            `
+            )
+            .join('');
+
+    const chartBarsHtml =
+      analytics.chronologicalQuizzes.length === 0
+        ? `<p style="font-size:11px;color:#64748b;text-align:center;padding:16px;">No exam scores available to chart yet.</p>`
+        : analytics.chronologicalQuizzes
+            .map((q) => {
+              const total = Number(q.quizzes?.total_marks || 100);
+              const pct = total > 0 ? Math.min(100, Math.round((Number(q.score || 0) / total) * 100)) : 0;
+              const barColor = pct >= 75 ? '#10b981' : pct >= 50 ? '#6366f1' : '#f59e0b';
+              const shortTitle = (q.quizzes?.title || 'Exam').slice(0, 14);
+              return `
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                  <span style="font-size:10px;font-weight:700;color:#1e293b;">${pct}%</span>
+                  <div style="width:100%;max-width:38px;height:90px;background:#e2e8f0;border-radius:6px;display:flex;align-items:flex-end;overflow:hidden;">
+                    <div style="width:100%;height:${pct}%;background:${barColor};border-radius:6px 6px 0 0;"></div>
+                  </div>
+                  <span style="font-size:9px;color:#475569;text-align:center;line-height:1.1;">${shortTitle}</span>
+                </div>
+              `;
+            })
+            .join('');
+
+    const printWindow = window.open('', '_blank', 'width=900,height=1100');
+    if (!printWindow) {
+      alert('Please allow pop-ups in your browser to download/print the PDF report.');
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Student Progress Report - ${stu.full_name} (${stu.index_number})</title>
+          <style>
+            * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+            body { margin: 0; padding: 28px; color: #0f172a; background: #ffffff; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #4f46e5; padding-bottom: 16px; margin-bottom: 20px; }
+            .title { font-size: 22px; font-weight: 800; color: #1e1b4b; margin: 0; }
+            .subtitle { font-size: 12px; color: #475569; margin: 4px 0 0; }
+            .student-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px; display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 12px; }
+            .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+            .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 20px; }
+            .card { border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; background: #ffffff; }
+            .card-label { font-size: 10px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.5px; }
+            .card-val { font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+            .section-title { font-size: 13px; font-weight: 800; color: #1e1b4b; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 18px; }
+            th { background: #f1f5f9; text-align: left; padding: 9px 10px; border: 1px solid #cbd5e1; font-weight: 700; color: #334155; }
+            td { padding: 8px 10px; border: 1px solid #e2e8f0; vertical-align: top; }
+            .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+            .badge-green { background: #dcfce7; color: #166534; }
+            .badge-blue { background: #dbeafe; color: #1e40af; }
+            .badge-amber { background: #fef3c7; color: #92400e; }
+            .footer { margin-top: 32px; display: flex; justify-content: space-between; font-size: 11px; color: #475569; border-top: 1px solid #e2e8f0; padding-top: 16px; }
+            @media print {
+              body { padding: 12px; }
+              @page { size: A4; margin: 12mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1 class="title">OFFICIAL STUDENT PROGRESS REPORT</h1>
+              <p class="subtitle">Smart Tuition LMS • Academic Performance & Attendance Statement</p>
+            </div>
+            <div style="text-align:right;font-size:11px;color:#475569;">
+              <strong>Issued Date:</strong> ${reportDate}<br/>
+              <strong>Class:</strong> ${courseTitle}
+            </div>
+          </div>
+
+          <div class="student-box">
+            <div>
+              <div style="color:#64748b;font-size:10px;font-weight:700;">STUDENT NAME</div>
+              <div style="font-size:15px;font-weight:800;color:#0f172a;">${stu.full_name}</div>
+            </div>
+            <div>
+              <div style="color:#64748b;font-size:10px;font-weight:700;">INDEX NUMBER</div>
+              <div style="font-size:14px;font-weight:700;color:#4f46e5;">${stu.index_number}</div>
+            </div>
+            <div>
+              <div style="color:#64748b;font-size:10px;font-weight:700;">CONTACT / WHATSAPP</div>
+              <div style="font-size:13px;font-weight:600;">${stu.whatsapp_number}</div>
+            </div>
+          </div>
+
+          <div class="grid-3">
+            <div class="card">
+              <div class="card-label">Verified Classes Attended</div>
+              <div class="card-val">${analytics.verifiedAttendanceCount} Sessions</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Exams & Quizzes Completed</div>
+              <div class="card-val">${studentQuizResults.length} Assessments</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Overall Exam Average</div>
+              <div class="card-val" style="color:#059669;">${analytics.overallAvg}%</div>
+            </div>
+          </div>
+
+          <div class="section-title">Month-over-Month Development Comparison (${analytics.lastMonthLabel} vs ${analytics.thisMonthLabel})</div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-label">Attendance Development</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;">
+                <span>${analytics.lastMonthLabel}: <strong>${analytics.lastMonthAtt} days</strong></span>
+                <span>${analytics.thisMonthLabel}: <strong>${analytics.thisMonthAtt} days</strong></span>
+                <span class="badge ${analytics.attDiff >= 0 ? 'badge-green' : 'badge-amber'}">
+                  ${analytics.attDiff > 0 ? `+${analytics.attDiff} Improved ↑` : analytics.attDiff === 0 ? 'Consistent →' : `${analytics.attDiff} Lower ↓`}
+                </span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-label">Exam Score Development</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;">
+                <span>${analytics.lastMonthLabel}: <strong>${analytics.lastMonthAvg}%</strong></span>
+                <span>${analytics.thisMonthLabel}: <strong>${analytics.thisMonthAvg}%</strong></span>
+                <span class="badge ${analytics.scoreDiff >= 0 ? 'badge-green' : 'badge-amber'}">
+                  ${analytics.scoreDiff > 0 ? `+${analytics.scoreDiff}% Improved ↑` : analytics.scoreDiff === 0 ? 'Steady →' : `${analytics.scoreDiff}% Drop ↓`}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-title">Exam & Quiz Performance Chart</div>
+          <div class="card" style="display:flex;align-items:flex-end;gap:12px;min-height:135px;margin-bottom:20px;">
+            ${chartBarsHtml}
+          </div>
+
+          <div class="section-title">Exam Marks & Teacher Remarks</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Exam / Quiz Title</th>
+                <th>Date</th>
+                <th>Marks</th>
+                <th>Percentage</th>
+                <th>Teacher Remark</th>
+              </tr>
+            </thead>
+            <tbody>${examRowsHtml}</tbody>
+          </table>
+
+          <div class="section-title">Class Attendance Log</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Class Name</th>
+                <th>Date</th>
+                <th>Verified Duration</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>${attRowsHtml}</tbody>
+          </table>
+
+          <div class="footer">
+            <div>Generated automatically by Smart Tuition LMS</div>
+            <div>___________________________<br/>Class Teacher Signature</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   // Expand a specific Exam Submission to inspect each answer and leave teacher remark
@@ -389,6 +680,7 @@ export default function TeacherMasterDashboard() {
         body: JSON.stringify({
           topic: meetingTopic || selectedCourse.title,
           duration: Number(meetingDuration) || 120,
+          minAttendanceMinutes: Number(minAttendanceMins) || 30,
           courseId: selectedCourse.id
         })
       });
@@ -397,7 +689,7 @@ export default function TeacherMasterDashboard() {
       if (!res.ok) throw new Error(resData.error || 'Failed to create meeting');
 
       await loadCourseDetails(selectedCourse.id);
-      alert('Zoom Live Meeting created successfully!');
+      alert('Zoom Live Meeting created with Anti-Link-Sharing & Attendance Verification!');
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -405,18 +697,49 @@ export default function TeacherMasterDashboard() {
     }
   };
 
+  // Sync Real Zoom Participant Durations from Zoom Servers
+  const handleSyncZoomAttendance = async () => {
+    if (!selectedCourse || !activeMeeting?.meeting_id) {
+      alert('No active Zoom meeting ID found to sync.');
+      return;
+    }
+
+    setIsSyncingAttendance(true);
+    try {
+      const res = await fetch('/api/zoom/attendance', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseId: selectedCourse.id,
+          meetingId: activeMeeting.meeting_id
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to sync Zoom attendance');
+
+      alert(
+        `Zoom Attendance Synced!\n\nTotal Zoom Participants Found: ${data.totalParticipantsFound}\nEnrolled Students Verified: ${data.syncedCount}`
+      );
+    } catch (err: any) {
+      alert('Sync Notice: ' + err.message);
+    } finally {
+      setIsSyncingAttendance(false);
+    }
+  };
+
   const handleCopyWhatsAppText = () => {
     if (!activeMeeting || !selectedCourse) return;
+    const portalUrl = `${window.location.origin}/student`;
     const msg = `📢 *${selectedCourse.title} - Live Zoom Class*\n\n` +
       `📌 Topic: ${activeMeeting.topic}\n` +
       `⏱️ Duration: ${activeMeeting.duration_minutes} Minutes\n\n` +
-      `🔗 Join Class Link:\n${activeMeeting.join_url}\n\n` +
-      `🆔 Meeting ID: ${activeMeeting.meeting_id || 'Direct'}\n` +
-      `🔑 Passcode: ${activeMeeting.password || 'None'}\n\n` +
-      `Please join the class on time!`;
+      `🔐 *Protected LMS Class Entry:*\n` +
+      `Log in to your Student Portal and click *"Join Live Class"* to enter:\n${portalUrl}\n\n` +
+      `⚠️ Note: Direct links are disabled for security. You must stay at least ${activeMeeting.min_attendance_minutes || 30} mins for attendance to be marked.`;
 
     navigator.clipboard.writeText(msg);
-    alert('WhatsApp student invite message copied successfully!');
+    alert('Secure LMS Class Invite copied to clipboard!');
   };
 
   // Student Actions: Auto Generate Username & Password
@@ -626,7 +949,6 @@ export default function TeacherMasterDashboard() {
 
     const finalQuestions: DraftQuestion[] = [...quizQuestionsList];
 
-    // Include currently typed question if complete
     if (qText.trim()) {
       if (questionType === 'mcq' && opt0.trim() && opt1.trim() && opt2.trim() && opt3.trim()) {
         finalQuestions.push({
@@ -659,7 +981,6 @@ export default function TeacherMasterDashboard() {
       const addedMarks = finalQuestions.reduce((sum, item) => sum + (item.marks || 10), 0);
 
       if (editingExistingQuiz) {
-        // Append new questions to existing Exam/Quiz Title
         const questionRows = finalQuestions.map((item) => ({
           quiz_id: editingExistingQuiz.id,
           question_type: item.question_type,
@@ -683,7 +1004,6 @@ export default function TeacherMasterDashboard() {
         await loadCourseDetails(selectedCourse.id);
         alert(`${finalQuestions.length} additional question(s) added to "${editingExistingQuiz.title}"!`);
       } else {
-        // Create brand new Exam/Quiz Title
         const { data: qz, error: qzErr } = await supabase.from('quizzes').insert([{
           course_id: selectedCourse.id,
           title: quizTitle.trim(),
@@ -816,6 +1136,8 @@ export default function TeacherMasterDashboard() {
       </div>
     );
   }
+
+  const reportAnalytics = selectedStudentForReport ? getProgressAnalytics() : null;
 
   // ================= AUTHENTICATED TEACHER DASHBOARD =================
   return (
@@ -1058,13 +1380,13 @@ export default function TeacherMasterDashboard() {
               </button>
             </div>
 
-            {/* TAB 1: ZOOM */}
+            {/* TAB 1: ZOOM (ANTI-LINK-SHARING + MINIMUM STAY ATTENDANCE + ZOOM SERVER SYNC) */}
             {activeTab === 'zoom' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <form onSubmit={handleCreateZoomMeeting} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                   <div className="flex items-center gap-2">
                     <Video className="w-5 h-5 text-blue-400" />
-                    <h3 className="font-bold text-sm text-white">Create New Zoom Meeting</h3>
+                    <h3 className="font-bold text-sm text-white">Create Protected Zoom Meeting</h3>
                   </div>
 
                   <div className="space-y-3 pt-2">
@@ -1075,13 +1397,25 @@ export default function TeacherMasterDashboard() {
                         placeholder="e.g. Unit 05 Discussion" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                       />
                     </div>
-                    <div>
-                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Duration (Minutes)</label>
-                      <input
-                        type="number" value={meetingDuration} onChange={(e) => setMeetingDuration(e.target.value)}
-                        placeholder="120" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
-                      />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Total Duration (Minutes)</label>
+                        <input
+                          type="number" min="10" value={meetingDuration} onChange={(e) => setMeetingDuration(e.target.value)}
+                          placeholder="120" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-emerald-400 font-semibold mb-1 block">Min. Attendance Stay (Mins)</label>
+                        <input
+                          type="number" min="1" value={minAttendanceMins} onChange={(e) => setMinAttendanceMins(e.target.value)}
+                          placeholder="30" className="w-full bg-[#070b14] border border-emerald-500/40 rounded-xl px-4 py-2.5 text-xs text-white" required
+                        />
+                      </div>
                     </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      * Anti-Link-Sharing &amp; Waiting Room enabled: Only enrolled, approved students logged in from their 1-device-locked LMS account can enter. Students leaving before <strong>{minAttendanceMins || 30} mins</strong> are not marked Present.
+                    </p>
                   </div>
 
                   <button
@@ -1089,7 +1423,7 @@ export default function TeacherMasterDashboard() {
                     className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/30 disabled:opacity-50"
                   >
                     {isCreatingMeeting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
-                    <span>{isCreatingMeeting ? 'Creating Meeting...' : 'Generate Zoom Meeting'}</span>
+                    <span>{isCreatingMeeting ? 'Creating Protected Meeting...' : 'Generate Protected Zoom Meeting'}</span>
                   </button>
                 </form>
 
@@ -1102,7 +1436,12 @@ export default function TeacherMasterDashboard() {
                     {activeMeeting ? (
                       <div className="mt-4 space-y-4">
                         <div className="p-4 rounded-2xl bg-[#131c31] border border-slate-700/50 space-y-2">
-                          <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Topic</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Topic</span>
+                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                              Min Stay: {activeMeeting.min_attendance_minutes || 30}m
+                            </span>
+                          </div>
                           <h4 className="text-sm font-bold text-white">{activeMeeting.topic}</h4>
                           <div className="flex gap-4 pt-1 font-mono text-xs text-slate-300">
                             <span>ID: <strong className="text-white">{activeMeeting.meeting_id || 'N/A'}</strong></span>
@@ -1121,7 +1460,16 @@ export default function TeacherMasterDashboard() {
                             onClick={handleCopyWhatsAppText}
                             className="w-full py-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
                           >
-                            <Share2 className="w-4 h-4" /> Copy WhatsApp Student Invite
+                            <Share2 className="w-4 h-4" /> Copy Protected LMS Class Notice
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSyncingAttendance}
+                            onClick={handleSyncZoomAttendance}
+                            className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-blue-600/20 border border-slate-700 hover:border-blue-500/40 text-slate-300 hover:text-blue-300 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAttendance ? 'animate-spin' : ''}`} />
+                            <span>{isSyncingAttendance ? 'Syncing Zoom Server Logs...' : 'Sync Real Zoom Attendance Logs'}</span>
                           </button>
                         </div>
                       </div>
@@ -1189,7 +1537,7 @@ export default function TeacherMasterDashboard() {
                   <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                     <div className="flex items-center justify-between">
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Reports
+                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students & Parent Reports
                       </h3>
                       <span className="text-xs text-slate-400">{students.length} Total Enrolled</span>
                     </div>
@@ -1222,7 +1570,7 @@ export default function TeacherMasterDashboard() {
                             <div className="flex flex-wrap items-center gap-2">
                               <button
                                 onClick={() => handleOpenStudentReport(st)}
-                                title="View full exam answers, marks, remarks, and attendance report"
+                                title="View progress charts, monthly comparison, exam remarks, and export PDF report"
                                 className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-blue-600/30"
                               >
                                 <BarChart3 className="w-3.5 h-3.5" />
@@ -1444,10 +1792,9 @@ export default function TeacherMasterDashboard() {
               </div>
             )}
 
-            {/* TAB 5: EXAMS & QUIZZES (WHOLE EXAM OR PER-QUESTION TIMER, MCQ + FREE ANSWERS, ANTI-CHEAT) */}
+            {/* TAB 5: EXAMS & QUIZZES */}
             {activeTab === 'quizzes' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column: Exam & Quiz Builder */}
                 <form onSubmit={handleCreateQuiz} className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-5 shadow-xl">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -1473,10 +1820,8 @@ export default function TeacherMasterDashboard() {
                     </div>
                   </div>
 
-                  {/* Exam Configuration (Hidden when appending to an already-created Exam Title) */}
                   {!editingExistingQuiz && (
                     <div className="space-y-4">
-                      {/* Assessment Type + Timer Mode Selectors */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="text-[11px] text-slate-300 font-semibold mb-1.5 block">Assessment Mode</label>
@@ -1527,7 +1872,6 @@ export default function TeacherMasterDashboard() {
                         </div>
                       </div>
 
-                      {/* Exam Title & Time Input */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="sm:col-span-2">
                           <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Exam / Quiz Title</label>
@@ -1581,7 +1925,6 @@ export default function TeacherMasterDashboard() {
                     </div>
                   )}
 
-                  {/* Question Editor Box */}
                   <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -1707,7 +2050,6 @@ export default function TeacherMasterDashboard() {
                     )}
                   </div>
 
-                  {/* Added Questions Preview List */}
                   {quizQuestionsList.length > 0 && (
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                       <span className="text-[11px] font-bold text-slate-400 block">Questions Queue ({quizQuestionsList.length}):</span>
@@ -1752,7 +2094,6 @@ export default function TeacherMasterDashboard() {
                   </button>
                 </form>
 
-                {/* Right Column: Published Exams & Quizzes List */}
                 <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
                   <h3 className="font-bold text-sm text-white flex items-center gap-2">
                     <Award className="w-4 h-4 text-amber-400" /> Published Exams & Quizzes ({quizzes.length})
@@ -1824,13 +2165,13 @@ export default function TeacherMasterDashboard() {
         )}
       </main>
 
-      {/* ================= MODAL: STUDENT PERFORMANCE, DETAILED ANSWERS & TEACHER REMARKS ================= */}
-      {selectedStudentForReport && (
+      {/* ================= MODAL: OFFICIAL PARENT PROGRESS REPORT WITH CHARTS, MONTH COMPARISON & PDF EXPORT ================= */}
+      {selectedStudentForReport && reportAnalytics && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 shadow-2xl space-y-6">
+          <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-y-auto p-6 md:p-8 shadow-2xl space-y-6">
             
-            {/* Header with Student Summary */}
-            <div className="flex items-start justify-between border-b border-slate-800 pb-5">
+            {/* Header with Student Summary & 1-Click Parent PDF Export */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold">
                   <BarChart3 className="w-6 h-6" />
@@ -1848,51 +2189,201 @@ export default function TeacherMasterDashboard() {
                 </div>
               </div>
 
-              <button
-                onClick={() => setSelectedStudentForReport(null)}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handlePrintParentReport}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/30"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Download / Print Parent PDF</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedStudentForReport(null)}
+                  className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {loadingReport ? (
               <div className="py-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Preparing performance report...
+                <Loader2 className="w-4 h-4 animate-spin" /> Preparing official progress report...
               </div>
             ) : (
               <div className="space-y-6">
                 
-                {/* 1. Quick Stats Cards */}
+                {/* 1. Overall Summary Cards */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
                     <span className="text-[10px] text-slate-400 font-bold uppercase">Exams & Quizzes</span>
                     <h4 className="text-xl font-black text-white mt-1">{studentQuizResults.length}</h4>
                   </div>
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Average Score</span>
-                    <h4 className="text-xl font-black text-emerald-400 mt-1">
-                      {studentQuizResults.length > 0 
-                        ? `${Math.round(
-                            studentQuizResults.reduce((a, b) => {
-                              const total = Number(b.quizzes?.total_marks || 100);
-                              const pct = total > 0 ? (Number(b.score || 0) / total) * 100 : 0;
-                              return a + pct;
-                            }, 0) / studentQuizResults.length
-                          )}%` 
-                        : '0%'}
-                    </h4>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Overall Average</span>
+                    <h4 className="text-xl font-black text-emerald-400 mt-1">{reportAnalytics.overallAvg}%</h4>
                   </div>
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Live Attendance</span>
-                    <h4 className="text-xl font-black text-blue-400 mt-1">{studentAttendanceLogs.length} Days</h4>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Verified Attendance</span>
+                    <h4 className="text-xl font-black text-blue-400 mt-1">{reportAnalytics.verifiedAttendanceCount} Days</h4>
                   </div>
                 </div>
 
-                {/* 2. Detailed Exam & Quiz Submissions with Answer Review + Teacher Remarks */}
+                {/* 2. Month-over-Month Development Comparison & Visual Progress Chart */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Left: Last Month vs This Month Comparison */}
+                  <div className="bg-[#070b14] border border-slate-800/90 p-5 rounded-2xl space-y-4">
+                    <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      Monthly Progress ({reportAnalytics.lastMonthLabel} vs {reportAnalytics.thisMonthLabel})
+                    </h4>
+
+                    {/* Attendance Monthly Comparison */}
+                    <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400 font-semibold">Class Attendance</span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                            reportAnalytics.attDiff > 0
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : reportAnalytics.attDiff < 0
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              : 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          {reportAnalytics.attDiff > 0 ? (
+                            <>
+                              <TrendingUp className="w-3 h-3" /> +{reportAnalytics.attDiff} Days Improved
+                            </>
+                          ) : reportAnalytics.attDiff < 0 ? (
+                            <>
+                              <TrendingDown className="w-3 h-3" /> {reportAnalytics.attDiff} Days Lower
+                            </>
+                          ) : (
+                            <>
+                              <Minus className="w-3 h-3" /> Consistent
+                            </>
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1 font-mono text-xs">
+                        <div className="bg-[#070b14] p-2.5 rounded-lg border border-slate-800/80">
+                          <span className="text-[10px] text-slate-500 block">{reportAnalytics.lastMonthLabel}</span>
+                          <strong className="text-slate-200">{reportAnalytics.lastMonthAtt} Classes</strong>
+                        </div>
+                        <div className="bg-[#070b14] p-2.5 rounded-lg border border-blue-500/30">
+                          <span className="text-[10px] text-blue-400 block">{reportAnalytics.thisMonthLabel}</span>
+                          <strong className="text-white">{reportAnalytics.thisMonthAtt} Classes</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Exam Score Monthly Comparison */}
+                    <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400 font-semibold">Exam &amp; Quiz Average</span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                            reportAnalytics.scoreDiff > 0
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : reportAnalytics.scoreDiff < 0
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              : 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          {reportAnalytics.scoreDiff > 0 ? (
+                            <>
+                              <TrendingUp className="w-3 h-3" /> +{reportAnalytics.scoreDiff}% Improved
+                            </>
+                          ) : reportAnalytics.scoreDiff < 0 ? (
+                            <>
+                              <TrendingDown className="w-3 h-3" /> {reportAnalytics.scoreDiff}% Drop
+                            </>
+                          ) : (
+                            <>
+                              <Minus className="w-3 h-3" /> Steady
+                            </>
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1 font-mono text-xs">
+                        <div className="bg-[#070b14] p-2.5 rounded-lg border border-slate-800/80">
+                          <span className="text-[10px] text-slate-500 block">{reportAnalytics.lastMonthLabel}</span>
+                          <strong className="text-slate-200">{reportAnalytics.lastMonthAvg}% Avg</strong>
+                        </div>
+                        <div className="bg-[#070b14] p-2.5 rounded-lg border border-emerald-500/30">
+                          <span className="text-[10px] text-emerald-400 block">{reportAnalytics.thisMonthLabel}</span>
+                          <strong className="text-emerald-300">{reportAnalytics.thisMonthAvg}% Avg</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Visual Score Progression Chart */}
+                  <div className="bg-[#070b14] border border-slate-800/90 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-purple-400" /> Exam Score Progression Chart
+                      </h4>
+                      <span className="text-[10px] text-slate-500 font-mono">Latest {reportAnalytics.chronologicalQuizzes.length} Exams</span>
+                    </div>
+
+                    {reportAnalytics.chronologicalQuizzes.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center text-xs text-slate-500 py-8">
+                        No exam results available to plot chart yet.
+                      </div>
+                    ) : (
+                      <div className="flex items-end justify-between gap-2.5 h-44 pt-4 px-2 border-b border-slate-800/80">
+                        {reportAnalytics.chronologicalQuizzes.map((q) => {
+                          const total = Number(q.quizzes?.total_marks || 100);
+                          const pct = total > 0 ? Math.min(100, Math.round((Number(q.score || 0) / total) * 100)) : 0;
+                          const barColor =
+                            pct >= 75
+                              ? 'from-emerald-600 to-emerald-400'
+                              : pct >= 50
+                              ? 'from-purple-600 to-indigo-400'
+                              : 'from-amber-600 to-amber-400';
+
+                          return (
+                            <div key={q.id} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end pb-2">
+                              <span className="text-[10px] font-mono font-bold text-slate-200">{pct}%</span>
+                              <div className="w-full max-w-[34px] h-28 bg-[#0c1322] rounded-lg border border-slate-800 flex items-end overflow-hidden p-0.5">
+                                <div
+                                  style={{ height: `${Math.max(8, pct)}%` }}
+                                  className={`w-full rounded-md bg-gradient-to-t ${barColor} transition-all duration-500`}
+                                />
+                              </div>
+                              <span className="text-[9px] text-slate-400 text-center line-clamp-1 w-full" title={q.quizzes?.title}>
+                                {q.quizzes?.title || 'Exam'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-center gap-4 text-[10px] text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> 75%+ Distinction
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-purple-400 inline-block"></span> 50-74% Merit
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> &lt;50% Needs Focus
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Detailed Exam & Quiz Submissions with Answer Review + Teacher Remarks */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" /> Exam Marks, Answers & Teacher Remarks
+                    <Award className="w-4 h-4 text-amber-400" /> Exam Marks, Answers &amp; Teacher Remarks
                   </h4>
 
                   {studentQuizResults.length === 0 ? (
@@ -1908,7 +2399,6 @@ export default function TeacherMasterDashboard() {
 
                         return (
                           <div key={res.id} className="bg-[#070b14] border border-slate-800/90 rounded-2xl overflow-hidden">
-                            {/* Summary Row */}
                             <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
@@ -1950,7 +2440,6 @@ export default function TeacherMasterDashboard() {
                               </div>
                             </div>
 
-                            {/* Expanded Question-by-Question Answer Breakdown + Teacher Remark Form */}
                             {isExpanded && (
                               <div className="border-t border-slate-800 bg-[#0c1322]/70 p-4 space-y-4">
                                 <div className="space-y-2.5">
@@ -1962,7 +2451,6 @@ export default function TeacherMasterDashboard() {
                                     <p className="text-xs text-slate-500">Loading questions...</p>
                                   ) : (
                                     qList.map((qItem: any, idx: number) => {
-                                      // Support both ID-keyed answers and legacy index-keyed answers
                                       const rawAns = ansObj[qItem.id] !== undefined ? ansObj[qItem.id] : ansObj[idx];
                                       const isFree = qItem.question_type === 'free_answer';
 
@@ -2023,11 +2511,10 @@ export default function TeacherMasterDashboard() {
                                   )}
                                 </div>
 
-                                {/* Teacher Score Adjustment & Remark Box tied to this Exam Title */}
                                 <div className="p-4 rounded-2xl bg-[#131c31] border border-slate-700/60 space-y-3">
                                   <div className="flex items-center gap-2 text-xs font-bold text-white">
                                     <MessageSquare className="w-4 h-4 text-blue-400" />
-                                    <span>Teacher Remark & Score Review for &quot;{res.quizzes?.title}&quot;</span>
+                                    <span>Teacher Remark &amp; Score Review for &quot;{res.quizzes?.title}&quot;</span>
                                   </div>
 
                                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -2042,7 +2529,7 @@ export default function TeacherMasterDashboard() {
                                     </div>
                                     <div className="sm:col-span-3">
                                       <label className="text-[10px] text-slate-400 font-semibold block mb-1">
-                                        Teacher Remark / Comment (Visible in Report & Student Hub)
+                                        Teacher Remark / Comment (Included in Parent PDF Report &amp; Student Hub)
                                       </label>
                                       <input
                                         type="text"
@@ -2062,7 +2549,7 @@ export default function TeacherMasterDashboard() {
                                       className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                                     >
                                       {savingFeedbackId === res.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                      <span>Save Remark & Marks</span>
+                                      <span>Save Remark &amp; Marks</span>
                                     </button>
                                   </div>
                                 </div>
@@ -2075,10 +2562,10 @@ export default function TeacherMasterDashboard() {
                   )}
                 </div>
 
-                {/* 3. Attendance Log */}
+                {/* 4. Class-wise Attendance Log */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-blue-400" /> Zoom Class Attendance History (Attendance Logs)
+                    <Calendar className="w-4 h-4 text-blue-400" /> Zoom Class Attendance History (By Class)
                   </h4>
 
                   {studentAttendanceLogs.length === 0 ? (
@@ -2086,17 +2573,29 @@ export default function TeacherMasterDashboard() {
                       No attendance records found.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {studentAttendanceLogs.map((att) => (
-                        <div key={att.id} className="p-3 bg-[#070b14] border border-slate-800/80 rounded-xl flex items-center justify-between text-xs">
-                          <span className="text-slate-300 font-mono">
-                            {new Date(att.marked_at).toLocaleDateString()} {new Date(att.marked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                            Present ({att.duration_minutes}m)
-                          </span>
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {studentAttendanceLogs.map((att) => {
+                        const isVerifiedPresent = att.status === 'Present';
+                        return (
+                          <div key={att.id} className="p-3 bg-[#070b14] border border-slate-800/80 rounded-xl flex items-center justify-between gap-2 text-xs">
+                            <div className="min-w-0">
+                              <p className="font-bold text-white truncate">{att.courses?.title || selectedCourse?.title}</p>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {new Date(att.marked_at).toLocaleDateString()} • {new Date(att.marked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <span
+                              className={`text-[10px] font-bold px-2.5 py-1 rounded border flex-shrink-0 ${
+                                isVerifiedPresent
+                                  ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                                  : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                              }`}
+                            >
+                              {att.status} ({att.verified_minutes || att.duration_minutes || 0}m)
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
