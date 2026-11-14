@@ -13,9 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Tuition LMS | Official Online Learning Portal",
+  title: "Science Hub - Jaffna | Official Online Learning Portal",
   description:
-    "Official Learning Management System for Live Zoom Classes, Study Tutes, Past Lesson Recordings, and Timed Online Exams.",
+    "Official Learning Management System of Science Hub - Jaffna (Education changes the world) for Live Zoom Classes, Study Tutes, Past Lesson Recordings, and Timed Online Exams.",
+  icons: {
+    icon: "/logo.jpg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { 
   Users, BookOpen, Video, HelpCircle, Plus, 
   Settings, CheckCircle2, XCircle, ExternalLink, 
-  GraduationCap, ArrowLeft, Loader2, KeyRound, 
+  ArrowLeft, Loader2, KeyRound, 
   Radio, Share2, Layers, AlertCircle, 
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
   Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut, Upload, Clock,
@@ -540,7 +540,8 @@ export default function TeacherMasterDashboard() {
     if (!selectedStudentForReport) return;
     const analytics = getProgressAnalytics();
     const stu = selectedStudentForReport;
-    const courseTitle = selectedCourse?.title || 'Tuition Class';
+    const courseTitle = selectedCourse?.title || 'Science Class';
+    const logoUrl = `${window.location.origin}/logo.jpg`;
     const reportDate = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -613,13 +614,15 @@ export default function TeacherMasterDashboard() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Student Progress Report - ${stu.full_name} (${stu.index_number})</title>
+          <title>Science Hub - Jaffna | Progress Report - ${stu.full_name} (${stu.index_number})</title>
           <style>
             * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
             body { margin: 0; padding: 28px; color: #0f172a; background: #ffffff; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #4f46e5; padding-bottom: 16px; margin-bottom: 20px; }
-            .title { font-size: 22px; font-weight: 800; color: #1e1b4b; margin: 0; }
-            .subtitle { font-size: 12px; color: #475569; margin: 4px 0 0; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #059669; padding-bottom: 16px; margin-bottom: 20px; }
+            .brand { display: flex; align-items: center; gap: 14px; }
+            .brand img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #10b981; padding: 2px; background: #ffffff; }
+            .title { font-size: 21px; font-weight: 800; color: #064e3b; margin: 0; }
+            .subtitle { font-size: 12px; color: #475569; margin: 3px 0 0; }
             .student-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px; display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 12px; }
             .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
             .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 20px; }
@@ -643,9 +646,12 @@ export default function TeacherMasterDashboard() {
         </head>
         <body>
           <div class="header">
-            <div>
-              <h1 class="title">OFFICIAL STUDENT PROGRESS REPORT</h1>
-              <p class="subtitle">Smart Tuition LMS • Academic Performance & Attendance Statement</p>
+            <div class="brand">
+              <img src="${logoUrl}" alt="Science Hub - Jaffna" />
+              <div>
+                <h1 class="title">SCIENCE HUB - JAFFNA</h1>
+                <p class="subtitle">Official Student Progress Report • Education changes the world</p>
+              </div>
             </div>
             <div style="text-align:right;font-size:11px;color:#475569;">
               <strong>Issued Date:</strong> ${reportDate}<br/>
@@ -660,7 +666,7 @@ export default function TeacherMasterDashboard() {
             </div>
             <div>
               <div style="color:#64748b;font-size:10px;font-weight:700;">INDEX NUMBER</div>
-              <div style="font-size:14px;font-weight:700;color:#4f46e5;">${stu.index_number}</div>
+              <div style="font-size:14px;font-weight:700;color:#059669;">${stu.index_number}</div>
             </div>
             <div>
               <div style="color:#64748b;font-size:10px;font-weight:700;">CONTACT / WHATSAPP</div>
@@ -740,7 +746,7 @@ export default function TeacherMasterDashboard() {
           </table>
 
           <div class="footer">
-            <div>Generated automatically by Smart Tuition LMS</div>
+            <div>Science Hub - Jaffna • Official Learning Portal</div>
             <div>___________________________<br/>Class Teacher Signature</div>
           </div>
 
@@ -879,7 +885,7 @@ export default function TeacherMasterDashboard() {
   const handleCopyWhatsAppText = () => {
     if (!activeMeeting || !selectedCourse) return;
     const portalUrl = `${window.location.origin}/student`;
-    const msg = `📢 *${selectedCourse.title} - Live Zoom Class*\n\n` +
+    const msg = `📢 *Science Hub - Jaffna | ${selectedCourse.title} - Live Zoom Class*\n\n` +
       `📌 Topic: ${activeMeeting.topic}\n` +
       `⏱️ Duration: ${activeMeeting.duration_minutes} Minutes\n\n` +
       `🔐 *Protected LMS Class Entry:*\n` +
@@ -913,7 +919,7 @@ export default function TeacherMasterDashboard() {
       setStudentCustomPass('');
       await loadCourseDetails(selectedCourse.id);
 
-      const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
+      const credText = `🎓 *Welcome to Science Hub - Jaffna (${selectedCourse.title})*\n\n` +
         `Your Student Portal Login Details:\n` +
         `🔗 Student Portal: ${window.location.origin}/student\n` +
         `👤 Username (Index No): *${newStu.index_number}*\n` +
@@ -929,7 +935,7 @@ export default function TeacherMasterDashboard() {
 
   const handleCopyStudentLogin = (st: any) => {
     if (!selectedCourse) return;
-    const credText = `🎓 *Welcome to ${selectedCourse.title}*\n\n` +
+    const credText = `🎓 *Welcome to Science Hub - Jaffna (${selectedCourse.title})*\n\n` +
       `Your Student Portal Login Details:\n` +
       `🔗 Student Portal: ${window.location.origin}/student\n` +
       `👤 Username (Index No): *${st.index_number}*\n` +
@@ -1228,11 +1234,13 @@ export default function TeacherMasterDashboard() {
           </div>
 
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center mx-auto shadow-lg shadow-purple-600/30">
-              <Lock className="w-6 h-6 text-white" />
-            </div>
-            <h2 className="text-xl font-black text-white">Teacher Master Login</h2>
-            <p className="text-xs text-slate-400">Sign in to manage your classes, students, and Zoom sessions</p>
+            <img
+              src="/logo.jpg"
+              alt="Science Hub - Jaffna"
+              className="w-16 h-16 rounded-full object-cover bg-white p-0.5 mx-auto shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-400/50"
+            />
+            <h2 className="text-xl font-black text-white">Science Hub - Jaffna</h2>
+            <p className="text-xs text-slate-400">Teacher Master Login • Education changes the world</p>
           </div>
 
           {authError && (
@@ -1293,12 +1301,14 @@ export default function TeacherMasterDashboard() {
           <Link href="/" className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center font-bold">
-            <GraduationCap className="w-5 h-5 text-white" />
-          </div>
+          <img
+            src="/logo.jpg"
+            alt="Science Hub - Jaffna"
+            className="w-10 h-10 rounded-full object-cover bg-white p-0.5 shadow-md ring-2 ring-emerald-400/40"
+          />
           <div>
-            <h1 className="font-bold text-sm tracking-wide">Teacher Master Panel</h1>
-            <p className="text-[10px] text-slate-400 font-mono">Digimart Control Center</p>
+            <h1 className="font-bold text-sm tracking-wide">Science Hub - Jaffna</h1>
+            <p className="text-[10px] text-emerald-400 font-mono">Teacher Master Panel</p>
           </div>
         </div>
 
@@ -1406,7 +1416,7 @@ export default function TeacherMasterDashboard() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-black">Your Classes</h2>
+                <h2 className="text-xl font-black">Science Hub - Jaffna Classes</h2>
                 <p className="text-xs text-slate-400">Select a class to manage Zoom meetings, students, recordings, and tutes.</p>
               </div>
               <button
@@ -2514,7 +2524,7 @@ export default function TeacherMasterDashboard() {
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    📱 {selectedStudentForReport.whatsapp_number} • {selectedCourse?.title}
+                    📱 {selectedStudentForReport.whatsapp_number} • {selectedCourse?.title} • Science Hub - Jaffna
                   </p>
                 </div>
               </div>

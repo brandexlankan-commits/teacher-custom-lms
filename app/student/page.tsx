@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
-  GraduationCap, Video, BookOpen, Clock, 
+  Video, BookOpen, Clock, 
   HelpCircle, CheckCircle2, XCircle, Award, 
   Download, ShieldCheck, PlaySquare, 
   Lock, X, CreditCard, AlertCircle, LogOut, KeyRound, Smartphone, Upload, Loader2,
@@ -812,11 +812,13 @@ export default function StudentPortal() {
       <div className="min-h-screen bg-[#070b14] flex flex-col justify-center items-center p-6 text-white font-sans selection:bg-purple-500 selection:text-white">
         <div className="w-full max-w-md bg-[#0c1322] border border-slate-800/90 rounded-3xl p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center mx-auto shadow-lg shadow-purple-600/30">
-              <GraduationCap className="w-7 h-7 text-white" />
-            </div>
-            <h2 className="text-xl font-black text-white">Student Portal Login</h2>
-            <p className="text-xs text-slate-400">Sign in to access your class lessons and study materials</p>
+            <img
+              src="/logo.jpg"
+              alt="Science Hub - Jaffna"
+              className="w-16 h-16 rounded-full object-cover bg-white p-0.5 mx-auto shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-400/50"
+            />
+            <h2 className="text-xl font-black text-white">Science Hub - Jaffna</h2>
+            <p className="text-xs text-slate-400">Student Portal Login • Education changes the world</p>
           </div>
 
           {loginError && (
@@ -892,11 +894,18 @@ export default function StudentPortal() {
       {/* Top Header */}
       <header className="border-b border-slate-800/80 px-6 py-4 bg-[#0c1322] sticky top-0 z-30 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center font-bold">
-            <GraduationCap className="w-5 h-5 text-white" />
-          </div>
+          <img
+            src="/logo.jpg"
+            alt="Science Hub - Jaffna"
+            className="w-10 h-10 rounded-full object-cover bg-white p-0.5 shadow-md ring-2 ring-emerald-400/40"
+          />
           <div>
-            <h1 className="font-bold text-sm">{studentInfo?.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-sm">{studentInfo?.name}</h1>
+              <span className="hidden md:inline-block text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                Science Hub - Jaffna
+              </span>
+            </div>
             <span className="text-[11px] font-mono text-purple-400">ID: {studentInfo?.indexNo}</span>
           </div>
         </div>
@@ -921,7 +930,7 @@ export default function StudentPortal() {
           <div className="p-8 text-center bg-[#0c1322] border border-slate-800 rounded-3xl space-y-3">
             <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
             <h3 className="font-bold text-base text-white">You are not enrolled in any class yet.</h3>
-            <p className="text-xs text-slate-400">Please contact your teacher to get your Index Number registered for the class.</p>
+            <p className="text-xs text-slate-400">Please contact your teacher at Science Hub - Jaffna to get your Index Number registered for the class.</p>
           </div>
         ) : (
           <>
@@ -1269,7 +1278,7 @@ export default function StudentPortal() {
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-bold text-xs text-red-400 flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-lg flex-shrink-0">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Share-Protected Stream
+                  <ShieldCheck className="w-3.5 h-3.5" /> Science Hub - Jaffna Protected Stream
                 </span>
                 <h4 className="text-xs font-bold text-white truncate">{activeVideoTitle}</h4>
               </div>
@@ -1307,7 +1316,7 @@ export default function StudentPortal() {
                   style={{ top: watermarkPos.top, left: watermarkPos.left }}
                   className="pointer-events-none select-none absolute z-30 transition-all duration-1000 px-3 py-1 rounded-lg bg-black/35 border border-white/10 text-[11px] font-mono font-bold text-white/40"
                 >
-                  {studentInfo?.name} • {studentInfo?.indexNo} • {studentInfo?.phone}
+                  Science Hub - Jaffna • {studentInfo?.name} • {studentInfo?.indexNo} • {studentInfo?.phone}
                 </div>
 
                 {!isPlaying && isVideoReady && (
@@ -1422,7 +1431,7 @@ export default function StudentPortal() {
             {activeQuiz.enable_watermark && (
               <div className="pointer-events-none select-none fixed inset-0 z-20 flex items-center justify-center overflow-hidden opacity-[0.05] rotate-[-25deg]">
                 <div className="text-center font-mono font-black text-2xl text-white space-y-12">
-                  <p>{studentInfo?.name} • {studentInfo?.indexNo} • {studentInfo?.phone}</p>
+                  <p>Science Hub - Jaffna • {studentInfo?.name} • {studentInfo?.indexNo}</p>
                   <p>{currentCourse?.title} • {activeQuiz.title}</p>
                   <p>{studentInfo?.name} • {studentInfo?.indexNo} • {studentInfo?.phone}</p>
                 </div>
@@ -1487,7 +1496,7 @@ export default function StudentPortal() {
                     Score: {score} / {questions.reduce((a, b) => a + (b.marks || 10), 0)}
                   </p>
                   <p className="text-[11px] text-slate-400">
-                    Your answers have been recorded for your teacher&apos;s review.
+                    Your answers have been recorded for your teacher&apos;s review at Science Hub - Jaffna.
                   </p>
                 </div>
               )}

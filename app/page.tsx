@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { GraduationCap, ShieldCheck, Video, HelpCircle, Award, Users, ArrowRight } from 'lucide-react';
+import { ShieldCheck, HelpCircle, Users, ArrowRight } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -10,38 +10,48 @@ export default function HomePage() {
       
       {/* Top Navbar */}
       <header className="border-b border-slate-800/80 px-6 py-4 bg-[#0c1322] flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center font-bold">
-            <GraduationCap className="w-5 h-5 text-white" />
-          </div>
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo.jpg"
+            alt="Science Hub - Jaffna"
+            className="w-10 h-10 rounded-full object-cover bg-white p-0.5 shadow-md ring-2 ring-emerald-400/40"
+          />
           <div>
-            <h1 className="font-bold text-sm tracking-tight text-white">Smart Tuition LMS</h1>
-            <span className="text-[10px] text-purple-400 uppercase tracking-widest font-semibold">Official Learning Portal</span>
+            <h1 className="font-bold text-sm tracking-tight text-white">Science Hub - Jaffna</h1>
+            <span className="text-[10px] text-emerald-400 uppercase tracking-widest font-semibold">Education changes the world</span>
           </div>
         </div>
 
         <span className="text-[11px] font-mono px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300">
-          Student & Teacher Hub
+          Official Learning Portal
         </span>
       </header>
 
       {/* Hero Section */}
       <main className="max-w-4xl mx-auto px-6 py-12 text-center space-y-8">
         
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold">
-          <ShieldCheck className="w-4 h-4 text-purple-400" />
-          <span>Attendance • Timed Exams • Tutes • Progress Reports</span>
+        <div className="flex flex-col items-center space-y-4">
+          <img
+            src="/logo.jpg"
+            alt="Science Hub - Jaffna Logo"
+            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover bg-white p-1 shadow-2xl shadow-emerald-500/20 ring-2 ring-emerald-400/50"
+          />
+
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold">
+            <ShieldCheck className="w-4 h-4 text-purple-400" />
+            <span>Attendance • Timed Exams • Tutes • Progress Reports</span>
+          </div>
         </div>
 
         <div className="space-y-3">
           <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-            Manage Your Tuition Classes <br />
-            <span className="bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              All in One Place with Smart Technology
+            Science Hub - Jaffna <br />
+            <span className="bg-gradient-to-r from-emerald-400 via-purple-400 to-indigo-300 bg-clip-text text-transparent">
+              Smart Online Learning Portal
             </span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
-            A modern LMS platform featuring automated attendance tracking, online exams with countdown timers, PDF tute distribution, and 1-click official progress reports.
+            Official digital classroom of Science Hub - Jaffna featuring automated attendance tracking, anti-cheat timed online exams, PDF study tutes, and 1-click official progress reports.
           </p>
         </div>
 
@@ -62,7 +72,7 @@ export default function HomePage() {
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition text-purple-400" />
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Track attendance, publish new tutes & quizzes, and view detailed student progress reports.
+                Track attendance, publish new tutes &amp; quizzes, and view detailed student progress reports.
               </p>
             </div>
             <span className="inline-block text-[11px] font-bold text-purple-400 group-hover:underline">
@@ -98,7 +108,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 px-6 py-4 text-center text-xs text-slate-500 bg-[#0c1322]">
-        Smart Tuition LMS Platform • Powered by Next.js & Supabase
+        © {new Date().getFullYear()} Science Hub - Jaffna • Education changes the world
       </footer>
 
     </div>
