@@ -1,10 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ShieldCheck, HelpCircle, Users, ArrowRight } from 'lucide-react';
 
 export default function HomePage() {
+  const [currentYear, setCurrentYear] = useState('2026');
+
+  useEffect(() => {
+    setCurrentYear(String(new Date().getFullYear()));
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#070b14] text-white flex flex-col justify-between selection:bg-purple-500 selection:text-white font-sans">
       
@@ -108,7 +114,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 px-6 py-4 text-center text-xs text-slate-500 bg-[#0c1322]">
-        © {new Date().getFullYear()} Science Hub - Jaffna • Education changes the world
+        © {currentYear} Science Hub - Jaffna • Education changes the world
       </footer>
 
     </div>
