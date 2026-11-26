@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Verify Enrollment & Flexible Monthly Access Control (Sri Lanka Timezone)
+    // 2. Verify Enrollment & Flexible Monthly Access Control (Sri Lanka Timezone: 1st–5th Grace Period, Locked from 6th)
     const { data: enrollment } = await supabase
       .from('enrollments')
       .select('*')
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 
     const isFreeCard = Boolean(enrollment.is_free_card);
     const hasValidExtension = Boolean(enrollment.access_until && todayStr <= enrollment.access_until);
-    const isWithinGracePeriod = dayOfMonth <= 15;
+    const isWithinGracePeriod = dayOfMonth <= 5;
 
     const { data: approvedSlip } = await supabase
       .from('slips')
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     if (!hasAccess) {
       return NextResponse.json(
         {
-          error: `Monthly fee grace period (1st–15th) has ended. Please submit your bank slip for ${currentMonth} or contact your teacher for access.`
+          error: `Monthly fee payment window (25th of last month to 5th of ${currentMonth}) has ended. Please submit your bank slip for ${currentMonth} or contact your teacher for access.`
         },
         { status: 403 }
       );
