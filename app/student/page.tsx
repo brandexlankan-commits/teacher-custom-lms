@@ -74,11 +74,21 @@ function generateHardwareFingerprint(): string {
   }
 }
 
+function getNextMonthYm(baseYm: string): string {
+  if (!baseYm || !baseYm.includes('-')) return '';
+  const [y, m] = baseYm.split('-').map(Number);
+  const d = new Date(y, (m || 1), 1);
+  const yr = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  return `${yr}-${mo}`;
+}
+
 function getColomboDateInfo() {
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' }); // 'YYYY-MM-DD'
   const currentMonth = todayStr.slice(0, 7); // 'YYYY-MM'
   const dayOfMonth = Number(todayStr.slice(8, 10));
-  return { todayStr, currentMonth, dayOfMonth };
+  const nextMonth = getNextMonthYm(currentMonth);
+  return { todayStr, currentMonth, dayOfMonth, nextMonth };
 }
 
 function formatMonthLabel(ym: string): string {
@@ -101,8 +111,8 @@ function getSelectableBillingMonths(baseYm: string): string[] {
 }
 
 export default function StudentPortal() {
-  const [dateInfo, setDateInfo] = useState({ todayStr: '', currentMonth: '', dayOfMonth: 1 });
-  const { todayStr, currentMonth, dayOfMonth } = dateInfo;
+  const [dateInfo, setDateInfo] = useState({ todayStr: '', currentMonth: '', dayOfMonth: 1, nextMonth: '' });
+  const { todayStr, currentMonth, dayOfMonth, nextMonth } = dateInfo;
 
   const [studentInfo, setStudentInfo] = useState<any | null>(null);
   const [currentCourse, setCurrentCourse] = useState<any | null>(null);
@@ -164,21 +174,25 @@ export default function StudentPortal() {
   const [cheatAlertMsg, setCheatAlertMsg] = useState<string | null>(null);
   const isSubmittingRef = useRef(false);
 
-  // Compute Flexible Access Control (Free Card / Extension Date / 1st-15th Grace Period / Current Month Approved Slip)
+  // Compute Flexible Access Control (25th Advance Reminder + 1st-5th Grace Period + Lock from 6th)
   const currentMonthSlip = studentSlips.find((s) => (s.billing_month || '') === currentMonth) || null;
+  const nextMonthSlip = studentSlips.find((s) => (s.billing_month || '') === nextMonth) || null;
   const selectedMonthSlip = studentSlips.find((s) => (s.billing_month || '') === selectedBillingMonth) || null;
 
   const isFreeCard = Boolean(enrollmentInfo?.is_free_card);
   const hasValidExtension = Boolean(todayStr && enrollmentInfo?.access_until && todayStr <= enrollmentInfo.access_until);
-  const isWithinGracePeriod = Boolean(todayStr) && dayOfMonth <= 15;
+  const isWithinGracePeriod = Boolean(todayStr) && dayOfMonth <= 5;
+  const isAdvanceReminderWindow = Boolean(todayStr) && dayOfMonth >= 25;
   const isCurrentMonthApproved = currentMonthSlip?.status === 'Approved';
+  const isNextMonthApproved = nextMonthSlip?.status === 'Approved';
 
   const isUnlocked = isFreeCard || hasValidExtension || isWithinGracePeriod || isCurrentMonthApproved;
 
   useEffect(() => {
     const info = getColomboDateInfo();
     setDateInfo(info);
-    setSelectedBillingMonth(info.currentMonth);
+    // From the 25th onwards, default the slip upload month selector to the upcoming month
+    setSelectedBillingMonth(info.dayOfMonth >= 25 ? info.nextMonth : info.currentMonth);
 
     const savedStudent = localStorage.getItem('lms_student_session');
     if (savedStudent) {
@@ -531,7 +545,7 @@ export default function StudentPortal() {
 
   const handleJoinClass = async () => {
     if (!isUnlocked) {
-      alert('Access Locked: The monthly fee grace period (1st–15th) has ended. Please upload your bank slip for this month or contact your teacher.');
+      alert(`Access Locked: The monthly fee payment window (25th of last month to 5th of ${formatMonthLabel(currentMonth)}) has ended. Please upload your bank slip for ${formatMonthLabel(currentMonth)} or contact your teacher.`);
       return;
     }
 
@@ -573,7 +587,8 @@ export default function StudentPortal() {
 
   const handleUploadSlip = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetMonth = selectedBillingMonth || getColomboDateInfo().currentMonth;
+    const info = getColomboDateInfo();
+    const targetMonth = selectedBillingMonth || (info.dayOfMonth >= 25 ? info.nextMonth : info.currentMonth);
     if (!slipFile || !currentCourse || !studentInfo || !targetMonth) return;
     setIsUploadingSlip(true);
 
@@ -625,7 +640,7 @@ export default function StudentPortal() {
 
   const handleStartQuiz = async (quiz: any) => {
     if (!isUnlocked) {
-      alert('Access Locked: Please upload your bank slip for this month or contact your teacher to take online exams.');
+      alert(`Access Locked: Please upload your bank slip for ${formatMonthLabel(currentMonth)} or contact your teacher to take online exams.`);
       return;
     }
 
@@ -934,24 +949,31 @@ export default function StudentPortal() {
           </div>
         ) : (
           <>
-            {/* FLEXIBLE MONTHLY PAYMENT STATUS & SLIP BANNER */}
+            {/* FLEXIBLE MONTHLY PAYMENT STATUS & REMINDER BANNER (25th Advance Reminder -> 5th Grace -> 6th Lock) */}
             <div className={`p-1 rounded-2xl border bg-gradient-to-r ${
-              isFreeCard || isCurrentMonthApproved
+              !isUnlocked
+                ? 'from-red-900/40 to-rose-900/20 border-red-500/30'
+                : isAdvanceReminderWindow && !isFreeCard && !isNextMonthApproved
+                ? 'from-amber-900/40 to-orange-900/20 border-amber-500/40'
+                : isFreeCard || isCurrentMonthApproved
                 ? 'from-emerald-900/40 to-teal-900/20 border-emerald-500/30'
                 : hasValidExtension
                 ? 'from-blue-900/40 to-indigo-900/20 border-blue-500/30'
                 : currentMonthSlip?.status === 'Pending'
                 ? 'from-amber-900/40 to-yellow-900/20 border-amber-500/30'
-                : !isUnlocked
-                ? 'from-red-900/40 to-rose-900/20 border-red-500/30'
                 : 'from-purple-900/40 to-pink-900/20 border-purple-500/30'
             }`}>
               <div className="bg-[#0c1322] rounded-xl p-5 md:p-6 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <CreditCard className={`w-5 h-5 ${
-                      isFreeCard || isCurrentMonthApproved ? 'text-emerald-400' : 
-                      !isUnlocked ? 'text-red-400' : 'text-purple-400'
+                      !isUnlocked
+                        ? 'text-red-400'
+                        : isAdvanceReminderWindow && !isFreeCard && !isNextMonthApproved
+                        ? 'text-amber-400'
+                        : isFreeCard || isCurrentMonthApproved
+                        ? 'text-emerald-400'
+                        : 'text-purple-400'
                     }`} />
                     <h3 className="font-bold text-sm text-white">{currentCourse.title} - Class Fees</h3>
                     {currentMonth && (
@@ -965,6 +987,29 @@ export default function StudentPortal() {
                     <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
                       <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Free Card Active — Full access granted to all classes and materials.
                     </div>
+                  ) : isAdvanceReminderWindow ? (
+                    isNextMonthApproved ? (
+                      <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                        <span>
+                          Payment verified for both <strong>{formatMonthLabel(currentMonth)}</strong> and <strong>{formatMonthLabel(nextMonth)}</strong>! Full access active.
+                        </span>
+                      </div>
+                    ) : nextMonthSlip?.status === 'Pending' ? (
+                      <div className="text-xs text-amber-300 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/30 inline-flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 flex-shrink-0 text-amber-400" />
+                        <span>
+                          Your bank slip for <strong>{formatMonthLabel(nextMonth)}</strong> is Pending approval. Current classes remain active.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-amber-300 bg-amber-500/15 px-3 py-2 rounded-lg border border-amber-500/40 inline-flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400 animate-pulse" />
+                        <span>
+                          <strong>Payment Reminder:</strong> Please submit your <strong className="text-white">{formatMonthLabel(nextMonth)}</strong> class fee (<strong className="text-emerald-400 font-mono">Rs. {currentCourse.monthly_fee}/-</strong>). Grace period runs until the <strong>5th of {formatMonthLabel(nextMonth)}</strong>, after which access will lock.
+                        </span>
+                      </div>
+                    )
                   ) : isCurrentMonthApproved ? (
                     <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
                       <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Payment verified for {formatMonthLabel(currentMonth)}. Full access active.
@@ -980,14 +1025,14 @@ export default function StudentPortal() {
                     <div className="text-xs text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 inline-flex items-center gap-1.5">
                       <Clock className="w-4 h-4 flex-shrink-0" />
                       <span>
-                        Bank slip for {formatMonthLabel(currentMonth)} is Pending approval. {isWithinGracePeriod ? 'Grace period access is currently active.' : 'Lessons will unlock once approved.'}
+                        Bank slip for {formatMonthLabel(currentMonth)} is Pending approval. {isWithinGracePeriod ? `Grace period access is active until the 5th of ${formatMonthLabel(currentMonth)}.` : 'Lessons will unlock once approved.'}
                       </span>
                     </div>
                   ) : isWithinGracePeriod ? (
-                    <div className="text-xs text-purple-300 bg-purple-500/10 px-3 py-2 rounded-lg border border-purple-500/20 inline-flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 flex-shrink-0 text-purple-400" />
+                    <div className="text-xs text-amber-300 bg-amber-500/15 px-3 py-2 rounded-lg border border-amber-500/30 inline-flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 flex-shrink-0 text-amber-400 animate-pulse" />
                       <span>
-                        Grace Period Active (1st–15th): Monthly Fee <strong className="text-emerald-400 font-mono">Rs. {currentCourse.monthly_fee}/-</strong> is due before the <strong>15th</strong> to keep lessons unlocked.
+                        <strong>Final Reminder (Grace Period 1st–5th):</strong> Please upload your <strong className="text-white">{formatMonthLabel(currentMonth)}</strong> fee (<strong className="text-emerald-400 font-mono">Rs. {currentCourse.monthly_fee}/-</strong>) before the <strong>5th</strong>. Access will lock after the 5th.
                       </span>
                     </div>
                   ) : currentMonthSlip?.status === 'Rejected' ? (
@@ -1001,7 +1046,7 @@ export default function StudentPortal() {
                     <div className="text-xs text-red-300 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20 inline-flex items-center gap-1.5">
                       <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
                       <span>
-                        Grace period (1st–15th) ended. Upload your bank slip for <strong>{formatMonthLabel(currentMonth)}</strong> (Rs. {currentCourse.monthly_fee}/-) to unlock lessons.
+                        <strong>Access Locked:</strong> The deadline (5th of {formatMonthLabel(currentMonth)}) has passed. Upload your bank slip for <strong>{formatMonthLabel(currentMonth)}</strong> (Rs. {currentCourse.monthly_fee}/-) to restore access.
                       </span>
                     </div>
                   )}

@@ -354,9 +354,10 @@ export default function TeacherMasterDashboard() {
 
   // Flexible Payment & Access Override Handlers
   const handleOpenAccessModal = (student: any) => {
-    const activeMonth = currentMonth || getColomboDateInfo().currentMonth;
+    const info = getColomboDateInfo();
+    const defaultMonth = info.dayOfMonth >= 25 ? getSelectableBillingMonths(info.currentMonth)[2] || info.currentMonth : info.currentMonth;
     setSelectedStudentForAccess(student);
-    setManualPayMonth(activeMonth);
+    setManualPayMonth(defaultMonth);
     setExtensionDateInput(student.access_until || '');
     setFreeCardToggle(Boolean(student.is_free_card));
   };
@@ -1705,7 +1706,8 @@ export default function TeacherMasterDashboard() {
                       <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
                         {students.map((st) => {
                           const hasExt = Boolean(todayStr && st.access_until && todayStr <= st.access_until);
-                          const inGrace = Boolean(todayStr) && dayOfMonth <= 15;
+                          const inGrace = Boolean(todayStr) && dayOfMonth <= 5;
+                          const isAdvanceWindow = Boolean(todayStr) && dayOfMonth >= 25;
 
                           return (
                             <div key={st.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1718,19 +1720,19 @@ export default function TeacherMasterDashboard() {
                                     </span>
                                   ) : st.is_current_month_paid ? (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                      Paid ({currentMonth})
+                                      Paid ({currentMonth}) {isAdvanceWindow ? '• Next Month Open' : ''}
                                     </span>
                                   ) : hasExt ? (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
                                       Extended until {st.access_until}
                                     </span>
                                   ) : inGrace ? (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                                      Grace Period (1st–15th)
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                      Grace Period (1st–5th)
                                     </span>
                                   ) : (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
-                                      Payment Due
+                                      Payment Due (Locked)
                                     </span>
                                   )}
                                 </div>
@@ -2438,7 +2440,7 @@ export default function TeacherMasterDashboard() {
                 <div>
                   <h4 className="text-xs font-bold text-white">2. Temporary Access Extension (Custom Due Date)</h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Grant temporary access until a specific date (e.g. 20th of the month). Access locks automatically after that date.
+                    Grant temporary access until a specific date (e.g. 15th of the month). Access locks automatically after that date.
                   </p>
                 </div>
 
@@ -2452,10 +2454,10 @@ export default function TeacherMasterDashboard() {
                   {currentMonth && (
                     <button
                       type="button"
-                      onClick={() => setExtensionDateInput(`${currentMonth}-20`)}
+                      onClick={() => setExtensionDateInput(`${currentMonth}-15`)}
                       className="px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 text-[11px] font-bold transition cursor-pointer"
                     >
-                      Until 20th
+                      Until 15th
                     </button>
                   )}
                   {extensionDateInput && (
