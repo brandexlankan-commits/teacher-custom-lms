@@ -5,14 +5,16 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { 
   Users, BookOpen, Video, HelpCircle, Plus, 
-  Settings, CheckCircle2, XCircle, ExternalLink, 
+  Settings, CheckCircle2, ExternalLink, 
   ArrowLeft, Loader2, KeyRound, 
   Radio, Share2, Layers, AlertCircle, 
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
-  Copy, Key, BarChart3, Award, Calendar, X, Lock, LogOut, Upload, Clock,
+  Copy, Key, BarChart3, Award, Calendar, X, LogOut, Upload, Clock,
   ShieldAlert, MessageSquare, ChevronDown, ChevronUp, Edit3, RefreshCw,
-  TrendingUp, TrendingDown, Minus, Printer, ShieldCheck
+  TrendingUp, TrendingDown, Minus, Printer, ShieldCheck, Globe
 } from 'lucide-react';
+
+type Lang = 'en' | 'ta';
 
 interface DraftQuestion {
   question_type: 'mcq' | 'free_answer';
@@ -23,6 +25,590 @@ interface DraftQuestion {
   marks: number;
 }
 
+const TAMIL_MONTHS = [
+  'ஜனவரி', 'பிப்ரவரி', 'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்',
+  'ஜூலை', 'ஆகஸ்ட்', 'செப்டம்பர்', 'அக்டோபர்', 'நவம்பர்', 'டிசம்பர்'
+];
+
+const TAMIL_SHORT_MONTHS = [
+  'ஜன', 'பிப்', 'மார்', 'ஏப்', 'மே', 'ஜூன்',
+  'ஜூலை', 'ஆக', 'செப்', 'அக்', 'நவ', 'டிச'
+];
+
+const UI_TEXT = {
+  en: {
+    checkingSession: 'Checking admin session...',
+    adminAccessOnly: 'Admin Access Only',
+    portalTagline: 'Teacher Master Login • Education changes the world',
+    adminUsername: 'Admin Username',
+    enterUsername: 'Enter username',
+    password: 'Password',
+    authenticating: 'Authenticating...',
+    signInBtn: 'Sign In to Control Panel',
+    teacherMasterPanel: 'Teacher Master Panel',
+    classesHub: 'Classes Hub',
+    zoomAccount: 'Zoom Account',
+    studentView: 'Student View',
+    logout: 'Logout',
+
+    // Zoom Config
+    zoomCredsTitle: 'Zoom Account Credentials',
+    zoomCredsDesc: 'Enter and save your Zoom Server-to-Server OAuth Account ID, Client ID, and Client Secret here.',
+    zoomConnected: 'Zoom Account connected successfully!',
+    zoomAccountId: 'Zoom Account ID',
+    clientId: 'Client ID',
+    clientSecret: 'Client Secret',
+    saveZoomCreds: 'Save Zoom Credentials',
+    zoomSavedAlert: 'Zoom API Credentials saved successfully!',
+
+    // Classes List
+    hubClassesTitle: 'Science Hub - Jaffna Classes',
+    hubClassesDesc: 'Select a class to manage Zoom meetings, students, recordings, and tutes.',
+    createNewClass: 'Create New Class',
+    loadingClasses: 'Loading classes...',
+    noClassesYet: 'No classes created yet. Click "Create New Class" to get started.',
+    manageClassHub: 'Manage Class Hub',
+    deleteClassTitle: 'Delete Class',
+    confirmDeleteClass: (title: string) => `Are you sure you want to delete "${title}"?`,
+    classCreatedAlert: 'Class created successfully!',
+    classNamePlaceholder: 'Class Name (e.g. 2026 A/L Biology)',
+    gradePlaceholder: 'Grade (e.g. Grade 13 / 2026 A/L)',
+    monthlyFeePlaceholder: 'Monthly Fee (e.g. 2500)',
+    cancel: 'Cancel',
+    createClassBtn: 'Create Class',
+
+    // Class Hub & Tabs
+    backToAllClasses: '← Back to all classes',
+    liveMeetingActive: 'Live Meeting Active',
+    tabZoom: 'Live Zoom Class',
+    tabStudents: 'Student Management',
+    tabRecordings: 'Lesson Recordings',
+    tabContent: 'Tutes & Notes',
+    tabQuizzes: 'Exams & Quizzes',
+
+    // Tab 1: Zoom
+    createZoomMeetingTitle: 'Create Protected Zoom Meeting',
+    classTopic: 'Class Topic',
+    classTopicPlaceholder: 'e.g. Unit 05 Discussion',
+    totalDurationMins: 'Total Duration (Minutes)',
+    minAttendanceStay: 'Min. Attendance Stay (Mins)',
+    zoomSecurityNote: (mins: string) =>
+      `Anti-Link-Sharing & Waiting Room enabled: Only enrolled, approved students logged in from their 1-device-locked LMS account can enter. Students leaving before ${mins || 30} mins are not marked Present.`,
+    creatingMeeting: 'Creating Protected Meeting...',
+    generateZoomMeeting: 'Generate Protected Zoom Meeting',
+    activeZoomDetails: 'Active Zoom Details',
+    topicLabel: 'Topic',
+    minStayBadge: 'Min Stay',
+    passLabel: 'Pass',
+    startClassAsHost: 'Start Class as Host',
+    copyProtectedNotice: 'Copy Protected LMS Class Notice',
+    syncZoomLogs: 'Sync Real Zoom Attendance Logs',
+    syncingZoomLogs: 'Syncing Zoom Server Logs...',
+    noZoomMeetingYet: 'No Zoom meeting has been created for this class yet.',
+    zoomCreatedAlert: 'Zoom Live Meeting created with Anti-Link-Sharing & Attendance Verification!',
+    configureZoomFirstAlert: 'Please go to the Zoom Account tab first, enter your Zoom Credentials, and click Save.',
+    noticeCopiedAlert: 'Secure LMS Class Invite copied to clipboard!',
+    noMeetingIdSyncAlert: 'No active Zoom meeting ID found to sync.',
+
+    // Tab 2: Students & Slips
+    enrollNewStudent: 'Enroll New Student',
+    enrollDesc: "Enter the student's name and WhatsApp number. Username and password will be auto-generated.",
+    fullName: 'Full Name',
+    fullNamePlaceholder: 'e.g. Kasun Madushanka',
+    whatsappNumber: 'WhatsApp Number',
+    indexOptional: 'Index Number (Optional)',
+    indexPlaceholder: 'Leave blank to auto-generate',
+    customPassOptional: 'Custom Password (Optional)',
+    customPassPlaceholder: 'Leave blank for a 6-digit PIN',
+    enrollGenerateBtn: 'Enroll & Generate Login Credentials',
+    enrolledStudentsTitle: 'Enrolled Students & Parent Reports',
+    totalLabel: 'Total',
+    noStudentsYet: 'No students enrolled yet.',
+    freeCardBadge: 'Free Card',
+    paidBadge: 'Paid',
+    nextMonthOpen: 'Next Month Open',
+    extendedUntil: 'Extended until',
+    gracePeriodBadge: 'Grace Period (1st–5th)',
+    paymentDueLocked: 'Payment Due (Locked)',
+    userLabel: 'User',
+    passShortLabel: 'Pass',
+    btnAccess: 'Access',
+    btnReport: 'Report',
+    btnLogin: 'Login',
+    btnUnlock: 'Unlock',
+    deviceUnlockedAlert: 'Device unlocked successfully! The student can now log in from a new device.',
+    slipsSectionTitle: 'Student Bank Slips & Payment Status',
+    slipsSectionDesc: 'Review student bank slips by billing month and approve or reject payments.',
+    slipsRecorded: 'Slips Recorded',
+    noSlipsYet: 'No bank slips submitted yet.',
+    statusApproved: 'Approved',
+    statusRejected: 'Rejected',
+    statusPending: 'Pending',
+    manualTeacherApproval: 'Manual Teacher Approval (No Slip)',
+    viewUploadedSlip: 'View Uploaded Slip ➔',
+    approveBtn: 'Approve',
+    rejectBtn: 'Reject',
+
+    // Tab 3: Recordings
+    addRecordingTitle: 'Add Past Lesson Recording',
+    addRecordingDesc: 'Enter the YouTube video link or video ID for the class lesson recording (set video to Unlisted on YouTube for privacy).',
+    lessonTitle: 'Lesson Title',
+    lessonTitlePlaceholder: 'e.g. Lesson 01 - Theory Revision',
+    youtubeIdLabel: 'YouTube Video ID / URL',
+    addRecordingBtn: 'Add Recording',
+    uploadedRecordings: 'Uploaded Recordings',
+    noRecordingsYet: 'No recordings added yet.',
+    watchOnYoutube: 'Watch on YouTube',
+    recordingAddedAlert: 'Recording added successfully!',
+    confirmDeleteRec: 'Are you sure you want to remove this recording?',
+
+    // Tab 4: Tutes
+    uploadNewTute: 'Upload New Tute / PDF',
+    tuteTitle: 'Tute Title',
+    tuteTitlePlaceholder: 'e.g. Unit 01 Study Notes',
+    selectPdfFile: 'Select PDF / Document File',
+    uploadingTute: 'Uploading Tute...',
+    uploadPdfMaterial: 'Upload PDF Material',
+    activeTutes: 'Active Tutes',
+    noTutesYet: 'No tutes uploaded yet.',
+    downloadArrow: 'Download ➔',
+    tuteUploadedAlert: 'Tute uploaded successfully!',
+    confirmDeleteTute: 'Are you sure you want to remove this tute?',
+
+    // Tab 5: Quizzes & Exams
+    createExamOrQuiz: 'Create Online Exam or Timed Quiz',
+    addMoreQuestionsTo: 'Add More Questions to:',
+    questionsQueued: 'Question(s) Queued',
+    cancelAdd: 'Cancel Add',
+    assessmentMode: 'Assessment Mode',
+    strictOnlineExam: 'Strict Online Exam',
+    practiceQuiz: 'Practice Quiz',
+    timerRule: 'Timer Rule',
+    wholeExamTime: 'Whole Exam Time',
+    perQuestionTime: 'Per-Question Time',
+    examQuizTitle: 'Exam / Quiz Title',
+    examTitlePlaceholder: 'e.g. Mid Exam - Term 01',
+    totalTimeMins: 'Total Time (Minutes)',
+    secondsPerQuestion: 'Seconds Per Question',
+    antiCheatNote: 'Strict Anti-Cheat Enabled: Tab-switch strike auto-submit, copy/paste block, dynamic student watermark, question shuffle, and 1-attempt limit.',
+    questionNum: 'Question',
+    mcq4Options: 'MCQ (4 Options)',
+    freeAnswer: 'Free Answer',
+    marksLabel: 'Marks:',
+    enterQuestionText: 'Enter question text...',
+    optionLabel: 'Option',
+    correctAnswer: 'Correct Answer:',
+    addQuestionToQueue: 'Add Question to Queue',
+    expectedAnswerPlaceholder: 'Model / Expected Answer (Optional — used for auto-check or teacher review)',
+    addFreeAnswerQuestion: 'Add Free Answer Question',
+    questionsQueueLabel: 'Questions Queue',
+    saving: 'Saving...',
+    publishBtn: 'Publish',
+    saveAppendBtn: 'Save & Append Questions to',
+    publishedExamsQuizzes: 'Published Exams & Quizzes',
+    noExamsYet: 'No exams or quizzes published yet.',
+    questionsCount: 'Questions',
+    marksShort: 'Marks',
+    minsTotal: 'Mins Total',
+    perQuestionShort: 'Question',
+    addMoreQuestionsBtn: 'Add More Questions',
+    confirmDeleteQuiz: 'Are you sure you want to delete this exam/quiz and all its questions?',
+    enterQuestionAlert: 'Please enter the question text.',
+    enterAll4OptionsAlert: 'Please enter all 4 answer options for an MCQ question.',
+    addAtLeastOneAlert: 'Please add at least one complete question before saving.',
+
+    // Access Modal
+    manageAccessTitle: 'Manage Student Access & Fees',
+    opt1Title: '1. Manual Payment Approval (Without Student Slip Upload)',
+    opt1Desc: 'Approve a specific billing month directly if the student sent the slip on WhatsApp or paid in cash.',
+    markMonthPaid: 'Mark Month Paid',
+    opt2Title: '2. Temporary Access Extension (Custom Due Date)',
+    opt2Desc: 'Grant temporary access until a specific date (e.g. 15th of the month). Access locks automatically after that date.',
+    until15th: 'Until 15th',
+    clearBtn: 'Clear',
+    opt3Title: '3. Free Card (Permanent Exemption)',
+    opt3Desc: 'Student retains uninterrupted access every month without payment locks.',
+    saveAccessRules: 'Save Access Rules',
+    accessRulesUpdatedAlert: 'Student access rules updated successfully!',
+
+    // Report Modal & PDF
+    downloadPrintPdf: 'Download / Print Parent PDF',
+    preparingReport: 'Preparing official progress report...',
+    examsQuizzesCard: 'Exams & Quizzes',
+    overallAverageCard: 'Overall Average',
+    verifiedAttendanceCard: 'Verified Attendance',
+    daysLabel: 'Days',
+    monthlyProgressTitle: 'Monthly Progress',
+    classAttendanceLabel: 'Class Attendance',
+    daysImproved: 'Days Improved',
+    daysLower: 'Days Lower',
+    consistentLabel: 'Consistent',
+    classesLabel: 'Classes',
+    examQuizAverageLabel: 'Exam & Quiz Average',
+    improvedLabel: 'Improved',
+    dropLabel: 'Drop',
+    steadyLabel: 'Steady',
+    avgLabel: 'Avg',
+    examScoreChartTitle: 'Exam Score Progression Chart',
+    latestExams: 'Latest',
+    examsLabelShort: 'Exams',
+    noChartData: 'No exam results available to plot chart yet.',
+    distinctionLabel: '75%+ Distinction',
+    meritLabel: '50-74% Merit',
+    needsFocusLabel: '<50% Needs Focus',
+    examMarksRemarksTitle: 'Exam Marks, Answers & Teacher Remarks',
+    noExamsAttempted: 'This student has not taken any exams or quizzes yet.',
+    dateLabel: 'Date',
+    tabSwitches: 'Tab Switches',
+    remarkLabel: 'Remark',
+    scoreLabel: 'Score',
+    reviewRemarkBtn: 'Review & Remark',
+    hideAnswersBtn: 'Hide Answers',
+    answersBreakdown: 'Student Answers Breakdown',
+    loadingQuestions: 'Loading questions...',
+    studentAnswerLabel: 'Student Answer',
+    noAnswerSubmitted: '(No answer submitted)',
+    expectedAnswerLabel: 'Expected Answer',
+    studentSelectedLabel: 'Student Selected',
+    timedOutUnanswered: '(Timed Out / Unanswered)',
+    correctAnswerLabel: 'Correct Answer',
+    teacherRemarkReviewTitle: 'Teacher Remark & Score Review for',
+    finalMarksLabel: 'Final Marks',
+    teacherRemarkInputLabel: 'Teacher Remark / Comment (Included in Parent PDF Report & Student Hub)',
+    teacherRemarkPlaceholder: 'e.g. Good progress! Review Unit 2 theory questions carefully.',
+    saveRemarkMarksBtn: 'Save Remark & Marks',
+    remarkSavedAlert: 'Teacher remark and score saved for this exam!',
+    zoomAttendanceHistory: 'Zoom Class Attendance History (By Class)',
+    noAttendanceRecords: 'No attendance records found.',
+    allowPopupsAlert: 'Please allow pop-ups in your browser to download/print the PDF report.',
+
+    // Printable Parent PDF
+    pdfSubtitle: 'Official Student Progress Report • Education changes the world',
+    pdfIssuedDate: 'Issued Date:',
+    pdfClass: 'Class:',
+    pdfStudentName: 'STUDENT NAME',
+    pdfIndexNumber: 'INDEX NUMBER',
+    pdfContactWhatsapp: 'CONTACT / WHATSAPP',
+    pdfVerifiedSessionsTitle: 'Verified Classes Attended',
+    pdfSessionsUnit: 'Sessions',
+    pdfExamsCompletedTitle: 'Exams & Quizzes Completed',
+    pdfAssessmentsUnit: 'Assessments',
+    pdfOverallAvgTitle: 'Overall Exam Average',
+    pdfMonthlyComparisonTitle: 'Month-over-Month Development Comparison',
+    pdfAttendanceDev: 'Attendance Development',
+    pdfExamScoreDev: 'Exam Score Development',
+    pdfDaysUnit: 'days',
+    pdfImprovedUp: 'Improved ↑',
+    pdfConsistentRight: 'Consistent →',
+    pdfLowerDown: 'Lower ↓',
+    pdfSteadyRight: 'Steady →',
+    pdfDropDown: 'Drop ↓',
+    pdfChartTitle: 'Exam & Quiz Performance Chart',
+    pdfNoChartScores: 'No exam scores available to chart yet.',
+    pdfMarksTableTitle: 'Exam Marks & Teacher Remarks',
+    pdfColExamTitle: 'Exam / Quiz Title',
+    pdfColDate: 'Date',
+    pdfColMarks: 'Marks',
+    pdfColPct: 'Percentage',
+    pdfColRemark: 'Teacher Remark',
+    pdfNoExamsRow: 'No exams or quizzes attempted yet.',
+    pdfAttTableTitle: 'Class Attendance Log',
+    pdfColClassName: 'Class Name',
+    pdfColDuration: 'Verified Duration',
+    pdfColStatus: 'Status',
+    pdfNoAttRow: 'No attendance logs recorded yet.',
+    pdfMinsUnit: 'mins',
+    pdfFooterPortal: 'Science Hub - Jaffna • Official Learning Portal',
+    pdfTeacherSig: 'Class Teacher Signature'
+  },
+
+  ta: {
+    checkingSession: 'நிர்வாக அமர்வு சரிபார்க்கப்படுகிறது...',
+    adminAccessOnly: 'நிர்வாக அணுகல் மட்டும்',
+    portalTagline: 'ஆசிரியர் முதன்மை உள்நுழைவு • கல்வி உலகை மாற்றும்',
+    adminUsername: 'நிர்வாகப் பயனர்பெயர்',
+    enterUsername: 'பயனர்பெயரை உள்ளிடவும்',
+    password: 'கடவுச்சொல்',
+    authenticating: 'சரிபார்க்கப்படுகிறது...',
+    signInBtn: 'கட்டுப்பாட்டுப் பலகத்தில் உள்நுழையவும்',
+    teacherMasterPanel: 'ஆசிரியர் முதன்மைப் பலகம்',
+    classesHub: 'வகுப்புகள் மையம்',
+    zoomAccount: 'Zoom கணக்கு',
+    studentView: 'மாணவர் பார்வை',
+    logout: 'வெளியேறு',
+
+    // Zoom Config
+    zoomCredsTitle: 'Zoom கணக்கு விவரங்கள்',
+    zoomCredsDesc: 'உங்கள் Zoom Server-to-Server OAuth Account ID, Client ID மற்றும் Client Secret ஆகியவற்றை இங்கே உள்ளிட்டு சேமிக்கவும்.',
+    zoomConnected: 'Zoom கணக்கு வெற்றிகரமாக இணைக்கப்பட்டுள்ளது!',
+    zoomAccountId: 'Zoom கணக்கு ஐடி (Account ID)',
+    clientId: 'கிளையன்ட் ஐடி (Client ID)',
+    clientSecret: 'கிளையன்ட் ரகசியம் (Client Secret)',
+    saveZoomCreds: 'Zoom விவரங்களைச் சேமி',
+    zoomSavedAlert: 'Zoom API விவரங்கள் வெற்றிகரமாகச் சேமிக்கப்பட்டன!',
+
+    // Classes List
+    hubClassesTitle: 'Science Hub - Jaffna வகுப்புகள்',
+    hubClassesDesc: 'Zoom வகுப்புகள், மாணவர்கள், பதிவுகள் மற்றும் குறிப்புகளை நிர்வகிக்க ஒரு வகுப்பைத் தேர்ந்தெடுக்கவும்.',
+    createNewClass: 'புதிய வகுப்பை உருவாக்கு',
+    loadingClasses: 'வகுப்புகள் ஏற்றப்படுகின்றன...',
+    noClassesYet: 'இதுவரை வகுப்புகள் எதுவும் உருவாக்கப்படவில்லை. தொடங்க "புதிய வகுப்பை உருவாக்கு" என்பதைக் கிளிக் செய்யவும்.',
+    manageClassHub: 'வகுப்பை நிர்வகி',
+    deleteClassTitle: 'வகுப்பை நீக்கு',
+    confirmDeleteClass: (title: string) => `"${title}" வகுப்பை நிச்சயமாக நீக்க விரும்புகிறீர்களா?`,
+    classCreatedAlert: 'வகுப்பு வெற்றிகரமாக உருவாக்கப்பட்டது!',
+    classNamePlaceholder: 'வகுப்பின் பெயர் (உதா: 2026 A/L உயிரியல்)',
+    gradePlaceholder: 'தரம் (உதா: தரம் 13 / 2026 A/L)',
+    monthlyFeePlaceholder: 'மாதாந்தக் கட்டணம் (உதா: 2500)',
+    cancel: 'ரத்து செய்',
+    createClassBtn: 'வகுப்பை உருவாக்கு',
+
+    // Class Hub & Tabs
+    backToAllClasses: '← அனைத்து வகுப்புகளுக்கும் திரும்பு',
+    liveMeetingActive: 'நேரடி வகுப்பு செயலில் உள்ளது',
+    tabZoom: 'நேரடி Zoom வகுப்பு',
+    tabStudents: 'மாணவர் நிர்வாகம்',
+    tabRecordings: 'பாடப் பதிவுகள்',
+    tabContent: 'பயிற்சித் தாள்கள் & குறிப்புகள்',
+    tabQuizzes: 'பரீட்சைகள் & வினாவிடைகள்',
+
+    // Tab 1: Zoom
+    createZoomMeetingTitle: 'பாதுகாக்கப்பட்ட Zoom வகுப்பை உருவாக்கு',
+    classTopic: 'வகுப்புத் தலைப்பு',
+    classTopicPlaceholder: 'உதா: அலகு 05 கலந்துரையாடல்',
+    totalDurationMins: 'மொத்த நேரம் (நிமிடங்கள்)',
+    minAttendanceStay: 'குறைந்தபட்ச வருகை நேரம் (நிமிடங்கள்)',
+    zoomSecurityNote: (mins: string) =>
+      `இணைப்புப் பகிர்வுத் தடுப்பு & Waiting Room செயலில் உள்ளது: 1-சாதனப் பூட்டு கொண்ட LMS கணக்கில் உள்நுழைந்த அங்கீகரிக்கப்பட்ட மாணவர்கள் மட்டுமே இணைய முடியும். ${mins || 30} நிமிடங்களுக்கு முன் வெளியேறும் மாணவர்களுக்கு வருகை (Present) பதிவு செய்யப்படாது.`,
+    creatingMeeting: 'பாதுகாக்கப்பட்ட வகுப்பு உருவாக்கப்படுகிறது...',
+    generateZoomMeeting: 'பாதுகாக்கப்பட்ட Zoom வகுப்பை உருவாக்கு',
+    activeZoomDetails: 'செயலில் உள்ள Zoom விவரங்கள்',
+    topicLabel: 'தலைப்பு',
+    minStayBadge: 'குறைந்தபட்ச நேரம்',
+    passLabel: 'கடவுச்சொல்',
+    startClassAsHost: 'ஆசிரியராக வகுப்பைத் தொடங்கு',
+    copyProtectedNotice: 'பாதுகாக்கப்பட்ட LMS வகுப்பு அறிவிப்பை நகலெடு',
+    syncZoomLogs: 'உண்மையான Zoom வருகைப் பதிவுகளை ஒத்திசை',
+    syncingZoomLogs: 'Zoom சேவையகப் பதிவுகள் ஒத்திசைக்கப்படுகின்றன...',
+    noZoomMeetingYet: 'இந்த வகுப்பிற்கு இதுவரை Zoom சந்திப்பு எதுவும் உருவாக்கப்படவில்லை.',
+    zoomCreatedAlert: 'இணைப்புப் பகிர்வுத் தடுப்பு மற்றும் வருகைச் சரிபார்ப்புடன் Zoom நேரடி வகுப்பு உருவாக்கப்பட்டது!',
+    configureZoomFirstAlert: 'முதலில் Zoom கணக்கு பகுதிக்குச் சென்று, உங்கள் Zoom விவரங்களை உள்ளிட்டு சேமிக்கவும்.',
+    noticeCopiedAlert: 'பாதுகாக்கப்பட்ட LMS வகுப்பு அழைப்பு நகலெடுக்கப்பட்டது!',
+    noMeetingIdSyncAlert: 'ஒத்திசைக்க செயலில் உள்ள Zoom Meeting ID எதுவும் காணப்படவில்லை.',
+
+    // Tab 2: Students & Slips
+    enrollNewStudent: 'புதிய மாணவரை இணை',
+    enrollDesc: 'மாணவரின் பெயர் மற்றும் WhatsApp எண்ணை உள்ளிடவும். பயனர்பெயர் மற்றும் கடவுச்சொல் தானாக உருவாக்கப்படும்.',
+    fullName: 'முழுப் பெயர்',
+    fullNamePlaceholder: 'உதா: கசுன் மதுஷங்க',
+    whatsappNumber: 'WhatsApp எண்',
+    indexOptional: 'சுட்டெண் / Index Number (விரும்பினால்)',
+    indexPlaceholder: 'தானாக உருவாக்க காலியாக விடவும்',
+    customPassOptional: 'தனிப்பயன் கடவுச்சொல் (விரும்பினால்)',
+    customPassPlaceholder: '6-இலக்க PIN எண்ணிற்கு காலியாக விடவும்',
+    enrollGenerateBtn: 'இணைத்து உள்நுழைவு விவரங்களை உருவாக்கு',
+    enrolledStudentsTitle: 'இணைந்த மாணவர்கள் & பெற்றோர் அறிக்கைகள்',
+    totalLabel: 'மொத்தம்',
+    noStudentsYet: 'இதுவரை மாணவர்கள் எவரும் இணைக்கப்படவில்லை.',
+    freeCardBadge: 'இலவச அட்டை (Free Card)',
+    paidBadge: 'கட்டணம் செலுத்தப்பட்டது',
+    nextMonthOpen: 'அடுத்த மாதம் திறந்துள்ளது',
+    extendedUntil: 'நீட்டிக்கப்பட்ட திகதி:',
+    gracePeriodBadge: 'சலுகைக் காலம் (1–5 திகதி)',
+    paymentDueLocked: 'கட்டணம் நிலுவை (பூட்டப்பட்டுள்ளது)',
+    userLabel: 'பயனர்',
+    passShortLabel: 'கடவுச்சொல்',
+    btnAccess: 'அணுகல்',
+    btnReport: 'அறிக்கை',
+    btnLogin: 'உள்நுழைவு',
+    btnUnlock: 'பூட்டு நீக்கு',
+    deviceUnlockedAlert: 'சாதனப் பூட்டு வெற்றிகரமாக நீக்கப்பட்டது! மாணவர் இப்போது புதிய சாதனத்திலிருந்து உள்நுழையலாம்.',
+    slipsSectionTitle: 'மாணவர் வங்கிப் பற்றுச்சீட்டுகள் & கட்டண நிலை',
+    slipsSectionDesc: 'மாதாந்தக் கட்டணப் பற்றுச்சீட்டுகளைப் பரிசீலித்து அனுமதிக்கவும் அல்லது நிராகரிக்கவும்.',
+    slipsRecorded: 'பற்றுச்சீட்டுகள் பதிவு',
+    noSlipsYet: 'இதுவரை வங்கிப் பற்றுச்சீட்டுகள் எதுவும் சமர்ப்பிக்கப்படவில்லை.',
+    statusApproved: 'அனுமதிக்கப்பட்டது',
+    statusRejected: 'நிராகரிக்கப்பட்டது',
+    statusPending: 'நிலுவையில்',
+    manualTeacherApproval: 'ஆசிரியரின் நேரடி அனுமதி (பற்றுச்சீட்டு இல்லை)',
+    viewUploadedSlip: 'பதிவேற்றிய பற்றுச்சீட்டைப் பார் ➔',
+    approveBtn: 'அனுமதி',
+    rejectBtn: 'நிராகரி',
+
+    // Tab 3: Recordings
+    addRecordingTitle: 'கடந்த பாடப் பதிவைச் சேர்',
+    addRecordingDesc: 'வகுப்புப் பாடப் பதிவிற்கான YouTube வீடியோ இணைப்பு அல்லது வீடியோ ஐடியை உள்ளிடவும் (பாதுகாப்பிற்காக YouTube-இல் Unlisted என வைக்கவும்).',
+    lessonTitle: 'பாடத் தலைப்பு',
+    lessonTitlePlaceholder: 'உதா: பாடம் 01 - கொள்கை மீட்டல்',
+    youtubeIdLabel: 'YouTube வீடியோ ID / இணைப்பு',
+    addRecordingBtn: 'பதிவைச் சேர்',
+    uploadedRecordings: 'பதிவேற்றப்பட்ட பதிவுகள்',
+    noRecordingsYet: 'இதுவரை பதிவுகள் எதுவும் சேர்க்கப்படவில்லை.',
+    watchOnYoutube: 'YouTube-இல் பார்',
+    recordingAddedAlert: 'பாடப் பதிவு வெற்றிகரமாகச் சேர்க்கப்பட்டது!',
+    confirmDeleteRec: 'இந்தப் பதிவை நிச்சயமாக நீக்க விரும்புகிறீர்களா?',
+
+    // Tab 4: Tutes
+    uploadNewTute: 'புதிய பயிற்சித் தாள் / PDF பதிவேற்று',
+    tuteTitle: 'பயிற்சித் தாள் தலைப்பு',
+    tuteTitlePlaceholder: 'உதா: அலகு 01 கற்றல் குறிப்புகள்',
+    selectPdfFile: 'PDF / ஆவணக் கோப்பைத் தேர்ந்தெடுக்கவும்',
+    uploadingTute: 'பதிவேற்றப்படுகிறது...',
+    uploadPdfMaterial: 'PDF கோப்பைப் பதிவேற்று',
+    activeTutes: 'செயலில் உள்ள பயிற்சித் தாள்கள்',
+    noTutesYet: 'இதுவரை பயிற்சித் தாள்கள் எதுவும் பதிவேற்றப்படவில்லை.',
+    downloadArrow: 'பதிவிறக்கு ➔',
+    tuteUploadedAlert: 'பயிற்சித் தாள் வெற்றிகரமாகப் பதிவேற்றப்பட்டது!',
+    confirmDeleteTute: 'இந்தப் பயிற்சித் தாளை நிச்சயமாக நீக்க விரும்புகிறீர்களா?',
+
+    // Tab 5: Quizzes & Exams
+    createExamOrQuiz: 'இணையப் பரீட்சை அல்லது நேர வினாவிடையை உருவாக்கு',
+    addMoreQuestionsTo: 'மேலும் வினாக்களைச் சேர்:',
+    questionsQueued: 'வினா(க்கள்) வரிசையில் உள்ளன',
+    cancelAdd: 'சேர்ப்பதை ரத்து செய்',
+    assessmentMode: 'மதிப்பீட்டு முறை',
+    strictOnlineExam: 'கடுமையான இணையப் பரீட்சை',
+    practiceQuiz: 'பயிற்சி வினாவிடை',
+    timerRule: 'நேர விதி',
+    wholeExamTime: 'முழுப் பரீட்சை நேரம்',
+    perQuestionTime: 'ஒரு வினாவிற்கான நேரம்',
+    examQuizTitle: 'பரீட்சை / வினாவிடைத் தலைப்பு',
+    examTitlePlaceholder: 'உதா: இடைப்பரீட்சை - தவணை 01',
+    totalTimeMins: 'மொத்த நேரம் (நிமிடங்கள்)',
+    secondsPerQuestion: 'ஒரு வினாவிற்கான வினாடிகள்',
+    antiCheatNote: 'கடுமையான மோசடித் தடுப்பு செயலில் உள்ளது: தாவல் மாற்றினால் (Tab-switch) தானாகச் சமர்ப்பித்தல், நகலெடுப்புத் தடை, மாணவர் வாட்டர்மார்க், வினாக்கள் குலைப்பு மற்றும் 1-முயற்சி வரம்பு.',
+    questionNum: 'வினா',
+    mcq4Options: 'பல்தேர்வு வினா (4 தெரிவுகள்)',
+    freeAnswer: 'சுய விடை (Free Answer)',
+    marksLabel: 'புள்ளிகள்:',
+    enterQuestionText: 'வினாவை உள்ளிடவும்...',
+    optionLabel: 'தெரிவு',
+    correctAnswer: 'சரியான விடை:',
+    addQuestionToQueue: 'வினாவை வரிசையில் சேர்',
+    expectedAnswerPlaceholder: 'மாதிரி / எதிர்பார்க்கப்படும் விடை (விரும்பினால் - ஆசிரியர் மதிப்பீட்டிற்கு)',
+    addFreeAnswerQuestion: 'சுய விடை வினாவைச் சேர்',
+    questionsQueueLabel: 'வினாக்கள் வரிசை',
+    saving: 'சேமிக்கப்படுகிறது...',
+    publishBtn: 'வெளியிடு:',
+    saveAppendBtn: 'சேமித்து வினாக்களைச் சேர்:',
+    publishedExamsQuizzes: 'வெளியிடப்பட்ட பரீட்சைகள் & வினாவிடைகள்',
+    noExamsYet: 'இதுவரை பரீட்சைகள் அல்லது வினாவிடைகள் எதுவும் வெளியிடப்படவில்லை.',
+    questionsCount: 'வினாக்கள்',
+    marksShort: 'புள்ளிகள்',
+    minsTotal: 'நிமிடங்கள் மொத்தம்',
+    perQuestionShort: 'வினா',
+    addMoreQuestionsBtn: 'மேலும் வினாக்களைச் சேர்',
+    confirmDeleteQuiz: 'இந்தப் பரீட்சை / வினாவிடையையும் அதன் அனைத்து வினாக்களையும் நிச்சயமாக நீக்க விரும்புகிறீர்களா?',
+    enterQuestionAlert: 'தயவுசெய்து வினாவை உள்ளிடவும்.',
+    enterAll4OptionsAlert: 'பல்தேர்வு வினாவிற்கு 4 தெரிவுகளையும் உள்ளிடவும்.',
+    addAtLeastOneAlert: 'சேமிப்பதற்கு முன் குறைந்தது ஒரு முழுமையான வினாவையாவது சேர்க்கவும்.',
+
+    // Access Modal
+    manageAccessTitle: 'மாணவர் அணுகல் & கட்டணங்களை நிர்வகி',
+    opt1Title: '1. நேரடி கட்டண அனுமதி (மாணவர் பற்றுச்சீட்டு பதிவேற்றாமல்)',
+    opt1Desc: 'மாணவர் WhatsApp மூலம் பற்றுச்சீட்டை அனுப்பியிருந்தால் அல்லது பணமாகச் செலுத்தியிருந்தால் குறிப்பிட்ட மாதத்தை நேரடியாக அனுமதிக்கவும்.',
+    markMonthPaid: 'மாதக் கட்டணம் செலுத்தப்பட்டதாகக் குறி',
+    opt2Title: '2. தற்காலிக அணுகல் நீட்டிப்பு (தனிப்பயன் இறுதித் திகதி)',
+    opt2Desc: 'குறிப்பிட்ட திகதி வரை (உதா: மாதத்தின் 15 ஆம் திகதி வரை) தற்காலிக அணுகல் வழங்கவும். அத்திகதிக்குப் பிறகு அணுகல் தானாகவே பூட்டப்படும்.',
+    until15th: '15 ஆம் திகதி வரை',
+    clearBtn: 'அழி',
+    opt3Title: '3. இலவச அட்டை (நிரந்தர கட்டண விலக்கு)',
+    opt3Desc: 'கட்டணப் பூட்டுகள் இன்றி மாணவர் ஒவ்வொரு மாதமும் தடையின்றி வகுப்பில் இணையலாம்.',
+    saveAccessRules: 'அணுகல் விதிகளைச் சேமி',
+    accessRulesUpdatedAlert: 'மாணவர் அணுகல் விதிகள் வெற்றிகரமாகப் புதுப்பிக்கப்பட்டன!',
+
+    // Report Modal & PDF
+    downloadPrintPdf: 'பெற்றோர் PDF அறிக்கையைப் பதிவிறக்கு / அச்சிடு',
+    preparingReport: 'உத்தியோகபூர்வ முன்னேற்ற அறிக்கை தயாராகிறது...',
+    examsQuizzesCard: 'பரீட்சைகள் & வினாவிடைகள்',
+    overallAverageCard: 'மொத்த சராசரி',
+    verifiedAttendanceCard: 'உறுதிப்படுத்தப்பட்ட வருகை',
+    daysLabel: 'நாட்கள்',
+    monthlyProgressTitle: 'மாதாந்த முன்னேற்றம்',
+    classAttendanceLabel: 'வகுப்பு வருகை',
+    daysImproved: 'நாட்கள் முன்னேற்றம்',
+    daysLower: 'நாட்கள் குறைவு',
+    consistentLabel: 'சீரானது',
+    classesLabel: 'வகுப்புகள்',
+    examQuizAverageLabel: 'பரீட்சை & வினாவிடை சராசரி',
+    improvedLabel: 'முன்னேற்றம்',
+    dropLabel: 'குறைவு',
+    steadyLabel: 'நிலையானது',
+    avgLabel: 'சராசரி',
+    examScoreChartTitle: 'பரீட்சைப் புள்ளி முன்னேற்ற வரைபடம்',
+    latestExams: 'சமீபத்திய',
+    examsLabelShort: 'பரீட்சைகள்',
+    noChartData: 'வரைபடம் வரைய இன்னும் பரீட்சை முடிவுகள் எதுவும் இல்லை.',
+    distinctionLabel: '75%+ அதிவிசேட சித்தி',
+    meritLabel: '50-74% திறமைச் சித்தி',
+    needsFocusLabel: '<50% கவனம் தேவை',
+    examMarksRemarksTitle: 'பரீட்சைப் புள்ளிகள், விடைகள் & ஆசிரியர் கருத்துக்கள்',
+    noExamsAttempted: 'இந்த மாணவர் இதுவரை எந்தப் பரீட்சைகளிலும் அல்லது வினாவிடைகளிலும் பங்கேற்கவில்லை.',
+    dateLabel: 'திகதி',
+    tabSwitches: 'தாவல் மாற்றங்கள்',
+    remarkLabel: 'கருத்து',
+    scoreLabel: 'புள்ளி',
+    reviewRemarkBtn: 'மதிப்பாய்வு & கருத்து',
+    hideAnswersBtn: 'விடைகளை மறை',
+    answersBreakdown: 'மாணவர் விடைகள் விபரம்',
+    loadingQuestions: 'வினாக்கள் ஏற்றப்படுகின்றன...',
+    studentAnswerLabel: 'மாணவரின் விடை',
+    noAnswerSubmitted: '(விடை சமர்ப்பிக்கப்படவில்லை)',
+    expectedAnswerLabel: 'எதிர்பார்க்கப்படும் விடை',
+    studentSelectedLabel: 'மாணவர் தெரிவு செய்தது',
+    timedOutUnanswered: '(நேரம் முடிந்தது / விடையளிக்கப்படவில்லை)',
+    correctAnswerLabel: 'சரியான விடை',
+    teacherRemarkReviewTitle: 'ஆசிரியர் கருத்து & புள்ளி மீளாய்வு:',
+    finalMarksLabel: 'இறுதிப் புள்ளிகள்',
+    teacherRemarkInputLabel: 'ஆசிரியர் கருத்து (பெற்றோர் PDF அறிக்கை மற்றும் மாணவர் பகுதியில் இடம்பெறும்)',
+    teacherRemarkPlaceholder: 'உதா: நல்ல முன்னேற்றம்! அலகு 2 வினாக்களை நன்கு மீட்டல் செய்யவும்.',
+    saveRemarkMarksBtn: 'கருத்து & புள்ளிகளைச் சேமி',
+    remarkSavedAlert: 'இந்தப் பரீட்சைக்கான ஆசிரியர் கருத்து மற்றும் புள்ளிகள் சேமிக்கப்பட்டன!',
+    zoomAttendanceHistory: 'Zoom வகுப்பு வருகை வரலாறு (வகுப்பு வாரியாக)',
+    noAttendanceRecords: 'வருகைப் பதிவுகள் எதுவும் காணப்படவில்லை.',
+    allowPopupsAlert: 'PDF அறிக்கையைப் பதிவிறக்க / அச்சிட உங்கள் உலாவியில் Pop-ups அனுமதிக்கவும்.',
+
+    // Printable Parent PDF
+    pdfSubtitle: 'உத்தியோகபூர்வ மாணவர் முன்னேற்ற அறிக்கை • கல்வி உலகை மாற்றும்',
+    pdfIssuedDate: 'வெளியிடப்பட்ட திகதி:',
+    pdfClass: 'வகுப்பு:',
+    pdfStudentName: 'மாணவர் பெயர்',
+    pdfIndexNumber: 'சுட்டெண் (INDEX NUMBER)',
+    pdfContactWhatsapp: 'தொடர்பு / WHATSAPP',
+    pdfVerifiedSessionsTitle: 'உறுதிப்படுத்தப்பட்ட வகுப்புகள்',
+    pdfSessionsUnit: 'அமர்வுகள்',
+    pdfExamsCompletedTitle: 'முடிக்கப்பட்ட பரீட்சைகள்',
+    pdfAssessmentsUnit: 'மதிப்பீடுகள்',
+    pdfOverallAvgTitle: 'மொத்தப் பரீட்சை சராசரி',
+    pdfMonthlyComparisonTitle: 'மாதாந்த முன்னேற்ற ஒப்பீடு',
+    pdfAttendanceDev: 'வருகை முன்னேற்றம்',
+    pdfExamScoreDev: 'பரீட்சைப் புள்ளி முன்னேற்றம்',
+    pdfDaysUnit: 'நாட்கள்',
+    pdfImprovedUp: 'முன்னேற்றம் ↑',
+    pdfConsistentRight: 'சீரானது →',
+    pdfLowerDown: 'குறைவு ↓',
+    pdfSteadyRight: 'நிலையானது →',
+    pdfDropDown: 'குறைவு ↓',
+    pdfChartTitle: 'பரீட்சை & வினாவிடை செயற்றிறன் வரைபடம்',
+    pdfNoChartScores: 'வரைபடம் வரைய இன்னும் பரீட்சைப் புள்ளிகள் இல்லை.',
+    pdfMarksTableTitle: 'பரீட்சைப் புள்ளிகள் & ஆசிரியர் கருத்துக்கள்',
+    pdfColExamTitle: 'பரீட்சை / வினாவிடை',
+    pdfColDate: 'திகதி',
+    pdfColMarks: 'புள்ளிகள்',
+    pdfColPct: 'சதவீதம்',
+    pdfColRemark: 'ஆசிரியர் கருத்து',
+    pdfNoExamsRow: 'இதுவரை பரீட்சைகள் எதுவும் எழுதப்படவில்லை.',
+    pdfAttTableTitle: 'வகுப்பு வருகைப் பதிவு',
+    pdfColClassName: 'வகுப்பின் பெயர்',
+    pdfColDuration: 'உறுதிப்படுத்தப்பட்ட நேரம்',
+    pdfColStatus: 'நிலை',
+    pdfNoAttRow: 'இதுவரை வருகைப் பதிவுகள் எதுவும் இல்லை.',
+    pdfMinsUnit: 'நிமிடங்கள்',
+    pdfFooterPortal: 'Science Hub - Jaffna • உத்தியோகபூர்வ கற்றல் தளம்',
+    pdfTeacherSig: 'வகுப்பு ஆசிரியர் கையொப்பம்'
+  }
+} as const;
+
 function getColomboDateInfo() {
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' }); // 'YYYY-MM-DD'
   const currentMonth = todayStr.slice(0, 7); // 'YYYY-MM'
@@ -30,11 +616,22 @@ function getColomboDateInfo() {
   return { todayStr, currentMonth, dayOfMonth };
 }
 
-function formatMonthLabel(ym: string): string {
+function formatMonthLabel(ym: string, lang: Lang = 'en'): string {
   if (!ym || !ym.includes('-')) return ym;
   const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, (m || 1) - 1, 1);
+  const monthIndex = (m || 1) - 1;
+  if (lang === 'ta') {
+    return `${TAMIL_MONTHS[monthIndex] || ''} ${y}`;
+  }
+  const d = new Date(y, monthIndex, 1);
   return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function formatShortMonthLabel(date: Date, lang: Lang = 'en'): string {
+  if (lang === 'ta') {
+    return `${TAMIL_SHORT_MONTHS[date.getMonth()] || ''} ${date.getFullYear()}`;
+  }
+  return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
 }
 
 function getSelectableBillingMonths(baseYm: string): string[] {
@@ -50,6 +647,9 @@ function getSelectableBillingMonths(baseYm: string): string[] {
 }
 
 export default function TeacherMasterDashboard() {
+  const [lang, setLang] = useState<Lang>('en');
+  const t = UI_TEXT[lang];
+
   const [dateInfo, setDateInfo] = useState({ todayStr: '', currentMonth: '', dayOfMonth: 1 });
   const { todayStr, currentMonth, dayOfMonth } = dateInfo;
 
@@ -153,6 +753,11 @@ export default function TeacherMasterDashboard() {
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
 
   useEffect(() => {
+    const savedLang = localStorage.getItem('lms_teacher_lang');
+    if (savedLang === 'ta' || savedLang === 'en') {
+      setLang(savedLang);
+    }
+
     const info = getColomboDateInfo();
     setDateInfo(info);
     setManualPayMonth(info.currentMonth);
@@ -165,6 +770,11 @@ export default function TeacherMasterDashboard() {
     }
     setAuthChecking(false);
   }, []);
+
+  const handleLanguageChange = (newLang: Lang) => {
+    setLang(newLang);
+    localStorage.setItem('lms_teacher_lang', newLang);
+  };
 
   const handleTeacherLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -250,7 +860,7 @@ export default function TeacherMasterDashboard() {
 
     if (!err) {
       setIsZoomConfigured(true);
-      alert('Zoom API Credentials saved successfully!');
+      alert(t.zoomSavedAlert);
       setMainView('classes');
     } else {
       alert('Error: ' + err.message);
@@ -270,18 +880,20 @@ export default function TeacherMasterDashboard() {
     }]);
 
     if (!error) {
-      alert('Class created successfully!');
+      alert(t.classCreatedAlert);
       setShowCreateModal(false);
       setNewTitle('');
       setNewGrade('');
       setNewFee('');
       fetchCourses();
+    } else {
+      alert('Error: ' + error.message);
     }
     setIsSubmittingCourse(false);
   };
 
   const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
-    if (!confirm(`Are you sure you want to delete "${courseTitle}"?`)) return;
+    if (!confirm(t.confirmDeleteClass(courseTitle))) return;
     const { error } = await supabase.from('courses').delete().eq('id', courseId);
     if (!error) {
       fetchCourses();
@@ -381,7 +993,7 @@ export default function TeacherMasterDashboard() {
 
       await loadCourseDetails(selectedCourse.id);
       setSelectedStudentForAccess(null);
-      alert('Student access rules updated successfully!');
+      alert(t.accessRulesUpdatedAlert);
     } catch (err: any) {
       alert('Error updating access: ' + err.message);
     } finally {
@@ -425,7 +1037,12 @@ export default function TeacherMasterDashboard() {
 
       await loadCourseDetails(selectedCourse.id);
       setSelectedStudentForAccess(null);
-      alert(`${selectedStudentForAccess.full_name} marked as PAID for ${formatMonthLabel(targetMonth)}!`);
+      const formattedM = formatMonthLabel(targetMonth, lang);
+      alert(
+        lang === 'ta'
+          ? `${selectedStudentForAccess.full_name} அவர்களுக்கு ${formattedM} மாதக் கட்டணம் செலுத்தப்பட்டதாகப் பதிவு செய்யப்பட்டது!`
+          : `${selectedStudentForAccess.full_name} marked as PAID for ${formattedM}!`
+      );
     } catch (err: any) {
       alert('Error marking payment: ' + err.message);
     } finally {
@@ -519,8 +1136,8 @@ export default function TeacherMasterDashboard() {
         ? Math.round(studentQuizResults.reduce((acc, q) => acc + calcPct(q), 0) / studentQuizResults.length)
         : 0;
 
-    const thisMonthLabel = now.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-    const lastMonthLabel = lastMonthDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    const thisMonthLabel = formatShortMonthLabel(now, lang);
+    const lastMonthLabel = formatShortMonthLabel(lastMonthDate, lang);
 
     return {
       thisMonthLabel,
@@ -541,9 +1158,9 @@ export default function TeacherMasterDashboard() {
     if (!selectedStudentForReport) return;
     const analytics = getProgressAnalytics();
     const stu = selectedStudentForReport;
-    const courseTitle = selectedCourse?.title || 'Science Class';
+    const courseTitle = selectedCourse?.title || (lang === 'ta' ? 'அறிவியல் வகுப்பு' : 'Science Class');
     const logoUrl = `${window.location.origin}/logo.jpg`;
-    const reportDate = new Date().toLocaleDateString('en-US', {
+    const reportDate = new Date().toLocaleDateString(lang === 'ta' ? 'ta-LK' : 'en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -551,7 +1168,7 @@ export default function TeacherMasterDashboard() {
 
     const examRowsHtml =
       studentQuizResults.length === 0
-        ? `<tr><td colspan="5" style="text-align:center;color:#64748b;padding:14px;">No exams or quizzes attempted yet.</td></tr>`
+        ? `<tr><td colspan="5" style="text-align:center;color:#64748b;padding:14px;">${t.pdfNoExamsRow}</td></tr>`
         : studentQuizResults
             .map((res) => {
               const total = Number(res.quizzes?.total_marks || 100);
@@ -570,14 +1187,14 @@ export default function TeacherMasterDashboard() {
 
     const attRowsHtml =
       studentAttendanceLogs.length === 0
-        ? `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:14px;">No attendance logs recorded yet.</td></tr>`
+        ? `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:14px;">${t.pdfNoAttRow}</td></tr>`
         : studentAttendanceLogs
             .map(
               (att) => `
               <tr>
                 <td><strong>${att.courses?.title || courseTitle}</strong></td>
                 <td>${new Date(att.marked_at).toLocaleDateString()}</td>
-                <td>${att.verified_minutes || att.duration_minutes || 0} mins</td>
+                <td>${att.verified_minutes || att.duration_minutes || 0} ${t.pdfMinsUnit}</td>
                 <td><span class="badge ${att.status === 'Present' ? 'badge-green' : 'badge-amber'}">${att.status}</span></td>
               </tr>
             `
@@ -586,7 +1203,7 @@ export default function TeacherMasterDashboard() {
 
     const chartBarsHtml =
       analytics.chronologicalQuizzes.length === 0
-        ? `<p style="font-size:11px;color:#64748b;text-align:center;padding:16px;">No exam scores available to chart yet.</p>`
+        ? `<p style="font-size:11px;color:#64748b;text-align:center;padding:16px;">${t.pdfNoChartScores}</p>`
         : analytics.chronologicalQuizzes
             .map((q) => {
               const total = Number(q.quizzes?.total_marks || 100);
@@ -607,7 +1224,7 @@ export default function TeacherMasterDashboard() {
 
     const printWindow = window.open('', '_blank', 'width=900,height=1100');
     if (!printWindow) {
-      alert('Please allow pop-ups in your browser to download/print the PDF report.');
+      alert(t.allowPopupsAlert);
       return;
     }
 
@@ -615,9 +1232,9 @@ export default function TeacherMasterDashboard() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Science Hub - Jaffna | Progress Report - ${stu.full_name} (${stu.index_number})</title>
+          <title>Science Hub - Jaffna | ${lang === 'ta' ? 'முன்னேற்ற அறிக்கை' : 'Progress Report'} - ${stu.full_name} (${stu.index_number})</title>
           <style>
-            * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+            * { box-sizing: border-box; font-family: 'Segoe UI', 'Noto Sans Tamil', Arial, sans-serif; }
             body { margin: 0; padding: 28px; color: #0f172a; background: #ffffff; }
             .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #059669; padding-bottom: 16px; margin-bottom: 20px; }
             .brand { display: flex; align-items: center; gap: 14px; }
@@ -629,8 +1246,8 @@ export default function TeacherMasterDashboard() {
             .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 20px; }
             .card { border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; background: #ffffff; }
             .card-label { font-size: 10px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.5px; }
-            .card-val { font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px; }
-            .section-title { font-size: 13px; font-weight: 800; color: #1e1b4b; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+            .card-val { font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+            .section-title { font-size: 12px; font-weight: 800; color: #1e1b4b; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.4px; }
             table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 18px; }
             th { background: #f1f5f9; text-align: left; padding: 9px 10px; border: 1px solid #cbd5e1; font-weight: 700; color: #334155; }
             td { padding: 8px 10px; border: 1px solid #e2e8f0; vertical-align: top; }
@@ -651,104 +1268,104 @@ export default function TeacherMasterDashboard() {
               <img src="${logoUrl}" alt="Science Hub - Jaffna" />
               <div>
                 <h1 class="title">SCIENCE HUB - JAFFNA</h1>
-                <p class="subtitle">Official Student Progress Report • Education changes the world</p>
+                <p class="subtitle">${t.pdfSubtitle}</p>
               </div>
             </div>
             <div style="text-align:right;font-size:11px;color:#475569;">
-              <strong>Issued Date:</strong> ${reportDate}<br/>
-              <strong>Class:</strong> ${courseTitle}
+              <strong>${t.pdfIssuedDate}</strong> ${reportDate}<br/>
+              <strong>${t.pdfClass}</strong> ${courseTitle}
             </div>
           </div>
 
           <div class="student-box">
             <div>
-              <div style="color:#64748b;font-size:10px;font-weight:700;">STUDENT NAME</div>
+              <div style="color:#64748b;font-size:10px;font-weight:700;">${t.pdfStudentName}</div>
               <div style="font-size:15px;font-weight:800;color:#0f172a;">${stu.full_name}</div>
             </div>
             <div>
-              <div style="color:#64748b;font-size:10px;font-weight:700;">INDEX NUMBER</div>
+              <div style="color:#64748b;font-size:10px;font-weight:700;">${t.pdfIndexNumber}</div>
               <div style="font-size:14px;font-weight:700;color:#059669;">${stu.index_number}</div>
             </div>
             <div>
-              <div style="color:#64748b;font-size:10px;font-weight:700;">CONTACT / WHATSAPP</div>
+              <div style="color:#64748b;font-size:10px;font-weight:700;">${t.pdfContactWhatsapp}</div>
               <div style="font-size:13px;font-weight:600;">${stu.whatsapp_number}</div>
             </div>
           </div>
 
           <div class="grid-3">
             <div class="card">
-              <div class="card-label">Verified Classes Attended</div>
-              <div class="card-val">${analytics.verifiedAttendanceCount} Sessions</div>
+              <div class="card-label">${t.pdfVerifiedSessionsTitle}</div>
+              <div class="card-val">${analytics.verifiedAttendanceCount} ${t.pdfSessionsUnit}</div>
             </div>
             <div class="card">
-              <div class="card-label">Exams & Quizzes Completed</div>
-              <div class="card-val">${studentQuizResults.length} Assessments</div>
+              <div class="card-label">${t.pdfExamsCompletedTitle}</div>
+              <div class="card-val">${studentQuizResults.length} ${t.pdfAssessmentsUnit}</div>
             </div>
             <div class="card">
-              <div class="card-label">Overall Exam Average</div>
+              <div class="card-label">${t.pdfOverallAvgTitle}</div>
               <div class="card-val" style="color:#059669;">${analytics.overallAvg}%</div>
             </div>
           </div>
 
-          <div class="section-title">Month-over-Month Development Comparison (${analytics.lastMonthLabel} vs ${analytics.thisMonthLabel})</div>
+          <div class="section-title">${t.pdfMonthlyComparisonTitle} (${analytics.lastMonthLabel} vs ${analytics.thisMonthLabel})</div>
           <div class="grid-2">
             <div class="card">
-              <div class="card-label">Attendance Development</div>
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;">
-                <span>${analytics.lastMonthLabel}: <strong>${analytics.lastMonthAtt} days</strong></span>
-                <span>${analytics.thisMonthLabel}: <strong>${analytics.thisMonthAtt} days</strong></span>
+              <div class="card-label">${t.pdfAttendanceDev}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;gap:6px;">
+                <span>${analytics.lastMonthLabel}: <strong>${analytics.lastMonthAtt} ${t.pdfDaysUnit}</strong></span>
+                <span>${analytics.thisMonthLabel}: <strong>${analytics.thisMonthAtt} ${t.pdfDaysUnit}</strong></span>
                 <span class="badge ${analytics.attDiff >= 0 ? 'badge-green' : 'badge-amber'}">
-                  ${analytics.attDiff > 0 ? `+${analytics.attDiff} Improved ↑` : analytics.attDiff === 0 ? 'Consistent →' : `${analytics.attDiff} Lower ↓`}
+                  ${analytics.attDiff > 0 ? `+${analytics.attDiff} ${t.pdfImprovedUp}` : analytics.attDiff === 0 ? t.pdfConsistentRight : `${analytics.attDiff} ${t.pdfLowerDown}`}
                 </span>
               </div>
             </div>
             <div class="card">
-              <div class="card-label">Exam Score Development</div>
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;">
+              <div class="card-label">${t.pdfExamScoreDev}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;gap:6px;">
                 <span>${analytics.lastMonthLabel}: <strong>${analytics.lastMonthAvg}%</strong></span>
                 <span>${analytics.thisMonthLabel}: <strong>${analytics.thisMonthAvg}%</strong></span>
                 <span class="badge ${analytics.scoreDiff >= 0 ? 'badge-green' : 'badge-amber'}">
-                  ${analytics.scoreDiff > 0 ? `+${analytics.scoreDiff}% Improved ↑` : analytics.scoreDiff === 0 ? 'Steady →' : `${analytics.scoreDiff}% Drop ↓`}
+                  ${analytics.scoreDiff > 0 ? `+${analytics.scoreDiff}% ${t.pdfImprovedUp}` : analytics.scoreDiff === 0 ? t.pdfSteadyRight : `${analytics.scoreDiff}% ${t.pdfDropDown}`}
                 </span>
               </div>
             </div>
           </div>
 
-          <div class="section-title">Exam & Quiz Performance Chart</div>
+          <div class="section-title">${t.pdfChartTitle}</div>
           <div class="card" style="display:flex;align-items:flex-end;gap:12px;min-height:135px;margin-bottom:20px;">
             ${chartBarsHtml}
           </div>
 
-          <div class="section-title">Exam Marks & Teacher Remarks</div>
+          <div class="section-title">${t.pdfMarksTableTitle}</div>
           <table>
             <thead>
               <tr>
-                <th>Exam / Quiz Title</th>
-                <th>Date</th>
-                <th>Marks</th>
-                <th>Percentage</th>
-                <th>Teacher Remark</th>
+                <th>${t.pdfColExamTitle}</th>
+                <th>${t.pdfColDate}</th>
+                <th>${t.pdfColMarks}</th>
+                <th>${t.pdfColPct}</th>
+                <th>${t.pdfColRemark}</th>
               </tr>
             </thead>
             <tbody>${examRowsHtml}</tbody>
           </table>
 
-          <div class="section-title">Class Attendance Log</div>
+          <div class="section-title">${t.pdfAttTableTitle}</div>
           <table>
             <thead>
               <tr>
-                <th>Class Name</th>
-                <th>Date</th>
-                <th>Verified Duration</th>
-                <th>Status</th>
+                <th>${t.pdfColClassName}</th>
+                <th>${t.pdfColDate}</th>
+                <th>${t.pdfColDuration}</th>
+                <th>${t.pdfColStatus}</th>
               </tr>
             </thead>
             <tbody>${attRowsHtml}</tbody>
           </table>
 
           <div class="footer">
-            <div>Science Hub - Jaffna • Official Learning Portal</div>
-            <div>___________________________<br/>Class Teacher Signature</div>
+            <div>${t.pdfFooterPortal}</div>
+            <div>___________________________<br/>${t.pdfTeacherSig}</div>
           </div>
 
           <script>
@@ -810,7 +1427,7 @@ export default function TeacherMasterDashboard() {
         )
       );
 
-      alert('Teacher remark and score saved for this exam!');
+      alert(t.remarkSavedAlert);
     } catch (err: any) {
       alert('Error saving feedback: ' + err.message);
     } finally {
@@ -823,7 +1440,7 @@ export default function TeacherMasterDashboard() {
     if (!selectedCourse) return;
 
     if (!isZoomConfigured) {
-      alert('Please go to the Zoom Account tab first, enter your Zoom Credentials, and click Save.');
+      alert(t.configureZoomFirstAlert);
       setMainView('zoom_config');
       return;
     }
@@ -845,7 +1462,7 @@ export default function TeacherMasterDashboard() {
       if (!res.ok) throw new Error(resData.error || 'Failed to create meeting');
 
       await loadCourseDetails(selectedCourse.id);
-      alert('Zoom Live Meeting created with Anti-Link-Sharing & Attendance Verification!');
+      alert(t.zoomCreatedAlert);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -855,7 +1472,7 @@ export default function TeacherMasterDashboard() {
 
   const handleSyncZoomAttendance = async () => {
     if (!selectedCourse || !activeMeeting?.meeting_id) {
-      alert('No active Zoom meeting ID found to sync.');
+      alert(t.noMeetingIdSyncAlert);
       return;
     }
 
@@ -874,7 +1491,9 @@ export default function TeacherMasterDashboard() {
       if (!res.ok) throw new Error(data.error || 'Failed to sync Zoom attendance');
 
       alert(
-        `Zoom Attendance Synced!\n\nTotal Zoom Participants Found: ${data.totalParticipantsFound}\nEnrolled Students Verified: ${data.syncedCount}`
+        lang === 'ta'
+          ? `Zoom வருகை ஒத்திசைக்கப்பட்டது!\n\nகண்டறியப்பட்ட மொத்த பங்கேற்பாளர்கள்: ${data.totalParticipantsFound}\nஉறுதிப்படுத்தப்பட்ட மாணவர்கள்: ${data.syncedCount}`
+          : `Zoom Attendance Synced!\n\nTotal Zoom Participants Found: ${data.totalParticipantsFound}\nEnrolled Students Verified: ${data.syncedCount}`
       );
     } catch (err: any) {
       alert('Sync Notice: ' + err.message);
@@ -886,15 +1505,22 @@ export default function TeacherMasterDashboard() {
   const handleCopyWhatsAppText = () => {
     if (!activeMeeting || !selectedCourse) return;
     const portalUrl = `${window.location.origin}/student`;
-    const msg = `📢 *Science Hub - Jaffna | ${selectedCourse.title} - Live Zoom Class*\n\n` +
-      `📌 Topic: ${activeMeeting.topic}\n` +
-      `⏱️ Duration: ${activeMeeting.duration_minutes} Minutes\n\n` +
-      `🔐 *Protected LMS Class Entry:*\n` +
-      `Log in to your Student Portal and click *"Join Live Class"* to enter:\n${portalUrl}\n\n` +
-      `⚠️ Note: Direct links are disabled for security. You must stay at least ${activeMeeting.min_attendance_minutes || 30} mins for attendance to be marked.`;
+    const msg = lang === 'ta'
+      ? `📢 *Science Hub - Jaffna | ${selectedCourse.title} - நேரடி Zoom வகுப்பு*\n\n` +
+        `📌 தலைப்பு: ${activeMeeting.topic}\n` +
+        `⏱️ கால அளவு: ${activeMeeting.duration_minutes} நிமிடங்கள்\n\n` +
+        `🔐 *பாதுகாக்கப்பட்ட LMS வகுப்பு நுழைவு:*\n` +
+        `உங்கள் மாணவர் தளத்தில் உள்நுழைந்து *"Join Live Class"* என்பதைக் கிளிக் செய்து இணையவும்:\n${portalUrl}\n\n` +
+        `⚠️ குறிப்பு: பாதுகாப்பிற்காக நேரடி இணைப்புகள் முடக்கப்பட்டுள்ளன. வருகை பதிவு செய்ய குறைந்தது ${activeMeeting.min_attendance_minutes || 30} நிமிடங்கள் வகுப்பில் இருக்க வேண்டும்.`
+      : `📢 *Science Hub - Jaffna | ${selectedCourse.title} - Live Zoom Class*\n\n` +
+        `📌 Topic: ${activeMeeting.topic}\n` +
+        `⏱️ Duration: ${activeMeeting.duration_minutes} Minutes\n\n` +
+        `🔐 *Protected LMS Class Entry:*\n` +
+        `Log in to your Student Portal and click *"Join Live Class"* to enter:\n${portalUrl}\n\n` +
+        `⚠️ Note: Direct links are disabled for security. You must stay at least ${activeMeeting.min_attendance_minutes || 30} mins for attendance to be marked.`;
 
     navigator.clipboard.writeText(msg);
-    alert('Secure LMS Class Invite copied to clipboard!');
+    alert(t.noticeCopiedAlert);
   };
 
   const handleAddStudent = async (e: React.FormEvent) => {
@@ -920,15 +1546,27 @@ export default function TeacherMasterDashboard() {
       setStudentCustomPass('');
       await loadCourseDetails(selectedCourse.id);
 
-      const credText = `🎓 *Welcome to Science Hub - Jaffna (${selectedCourse.title})*\n\n` +
-        `Your Student Portal Login Details:\n` +
-        `🔗 Student Portal: ${window.location.origin}/student\n` +
-        `👤 Username (Index No): *${newStu.index_number}*\n` +
-        `🔑 Password: *${newStu.password || autoPassword}*\n\n` +
-        `⚠️ Please log in using these details on your phone or computer. (Your account will be locked to the first device you log in from.)`;
+      const finalPass = newStu.password || autoPassword;
+      const credText = lang === 'ta'
+        ? `🎓 *Science Hub - Jaffna (${selectedCourse.title}) வகுப்பிற்கு நல்வரவு!*\n\n` +
+          `உங்கள் மாணவர் போர்டல் உள்நுழைவு விவரங்கள்:\n` +
+          `🔗 மாணவர் போர்டல்: ${window.location.origin}/student\n` +
+          `👤 பயனர்பெயர் (Index No): *${newStu.index_number}*\n` +
+          `🔑 கடவுச்சொல்: *${finalPass}*\n\n` +
+          `⚠️ உங்கள் தொலைபேசி அல்லது கணினியில் இந்த விவரங்களைப் பயன்படுத்தி உள்நுழையவும். (நீங்கள் முதலில் உள்நுழையும் சாதனத்துடன் உங்கள் கணக்கு பூட்டப்படும்.)`
+        : `🎓 *Welcome to Science Hub - Jaffna (${selectedCourse.title})*\n\n` +
+          `Your Student Portal Login Details:\n` +
+          `🔗 Student Portal: ${window.location.origin}/student\n` +
+          `👤 Username (Index No): *${newStu.index_number}*\n` +
+          `🔑 Password: *${finalPass}*\n\n` +
+          `⚠️ Please log in using these details on your phone or computer. (Your account will be locked to the first device you log in from.)`;
 
       navigator.clipboard.writeText(credText);
-      alert(`Student enrolled successfully!\n\nUsername: ${newStu.index_number}\nPassword: ${newStu.password || autoPassword}\n\n(WhatsApp Login Message has been copied to your clipboard)`);
+      alert(
+        lang === 'ta'
+          ? `மாணவர் வெற்றிகரமாக இணைக்கப்பட்டார்!\n\nபயனர்பெயர்: ${newStu.index_number}\nகடவுச்சொல்: ${finalPass}\n\n(WhatsApp உள்நுழைவுச் செய்தி நகலெடுக்கப்பட்டுள்ளது)`
+          : `Student enrolled successfully!\n\nUsername: ${newStu.index_number}\nPassword: ${finalPass}\n\n(WhatsApp Login Message has been copied to your clipboard)`
+      );
     } else {
       alert('Enrollment Error: ' + (err?.message || 'An error occurred'));
     }
@@ -936,21 +1574,33 @@ export default function TeacherMasterDashboard() {
 
   const handleCopyStudentLogin = (st: any) => {
     if (!selectedCourse) return;
-    const credText = `🎓 *Welcome to Science Hub - Jaffna (${selectedCourse.title})*\n\n` +
-      `Your Student Portal Login Details:\n` +
-      `🔗 Student Portal: ${window.location.origin}/student\n` +
-      `👤 Username (Index No): *${st.index_number}*\n` +
-      `🔑 Password: *${st.password || st.whatsapp_number || '123456'}*\n\n` +
-      `⚠️ Please log in using these details on your phone or computer. (Your account will be locked to the first device you log in from.)`;
+    const finalPass = st.password || st.whatsapp_number || '123456';
+    const credText = lang === 'ta'
+      ? `🎓 *Science Hub - Jaffna (${selectedCourse.title}) வகுப்பிற்கு நல்வரவு!*\n\n` +
+        `உங்கள் மாணவர் போர்டல் உள்நுழைவு விவரங்கள்:\n` +
+        `🔗 மாணவர் போர்டல்: ${window.location.origin}/student\n` +
+        `👤 பயனர்பெயர் (Index No): *${st.index_number}*\n` +
+        `🔑 கடவுச்சொல்: *${finalPass}*\n\n` +
+        `⚠️ உங்கள் தொலைபேசி அல்லது கணினியில் இந்த விவரங்களைப் பயன்படுத்தி உள்நுழையவும். (நீங்கள் முதலில் உள்நுழையும் சாதனத்துடன் உங்கள் கணக்கு பூட்டப்படும்.)`
+      : `🎓 *Welcome to Science Hub - Jaffna (${selectedCourse.title})*\n\n` +
+        `Your Student Portal Login Details:\n` +
+        `🔗 Student Portal: ${window.location.origin}/student\n` +
+        `👤 Username (Index No): *${st.index_number}*\n` +
+        `🔑 Password: *${finalPass}*\n\n` +
+        `⚠️ Please log in using these details on your phone or computer. (Your account will be locked to the first device you log in from.)`;
 
     navigator.clipboard.writeText(credText);
-    alert(`Login details (WhatsApp Message) for ${st.full_name} copied to clipboard!`);
+    alert(
+      lang === 'ta'
+        ? `${st.full_name} அவர்களின் உள்நுழைவு விவரங்கள் (WhatsApp செய்தி) நகலெடுக்கப்பட்டன!`
+        : `Login details (WhatsApp Message) for ${st.full_name} copied to clipboard!`
+    );
   };
 
   const handleUnlockDevice = async (studentId: string) => {
     const { error } = await supabase.from('students').update({ device_id: null }).eq('id', studentId);
     if (!error) {
-      alert('Device unlocked successfully! The student can now log in from a new device.');
+      alert(t.deviceUnlockedAlert);
       loadCourseDetails(selectedCourse.id);
     } else {
       alert('Unlock Error: ' + error.message);
@@ -976,12 +1626,12 @@ export default function TeacherMasterDashboard() {
       setRecordingTitle('');
       setRecordingId('');
       loadCourseDetails(selectedCourse.id);
-      alert('Recording added successfully!');
+      alert(t.recordingAddedAlert);
     }
   };
 
   const handleDeleteRecording = async (recId: string) => {
-    if (!confirm('Are you sure you want to remove this recording?')) return;
+    if (!confirm(t.confirmDeleteRec)) return;
     await supabase.from('recordings').delete().eq('id', recId);
     loadCourseDetails(selectedCourse.id);
   };
@@ -1021,7 +1671,7 @@ export default function TeacherMasterDashboard() {
       setMaterialTitle('');
       setMaterialFile(null);
       loadCourseDetails(selectedCourse.id);
-      alert('Tute uploaded successfully!');
+      alert(t.tuteUploadedAlert);
     } catch (err: any) {
       alert('Upload Error: ' + err.message);
     } finally {
@@ -1030,20 +1680,20 @@ export default function TeacherMasterDashboard() {
   };
 
   const handleDeleteMaterial = async (materialId: string) => {
-    if (!confirm('Are you sure you want to remove this tute?')) return;
+    if (!confirm(t.confirmDeleteTute)) return;
     await supabase.from('materials').delete().eq('id', materialId);
     if (selectedCourse) loadCourseDetails(selectedCourse.id);
   };
 
   const handleAddQuestionToList = () => {
     if (!qText.trim()) {
-      alert('Please enter the question text.');
+      alert(t.enterQuestionAlert);
       return;
     }
 
     if (questionType === 'mcq') {
       if (!opt0.trim() || !opt1.trim() || !opt2.trim() || !opt3.trim()) {
-        alert('Please enter all 4 answer options for an MCQ question.');
+        alert(t.enterAll4OptionsAlert);
         return;
       }
     }
@@ -1123,7 +1773,7 @@ export default function TeacherMasterDashboard() {
     }
 
     if (finalQuestions.length === 0) {
-      alert('Please add at least one complete question before saving.');
+      alert(t.addAtLeastOneAlert);
       return;
     }
 
@@ -1151,9 +1801,14 @@ export default function TeacherMasterDashboard() {
           .update({ total_marks: newTotalMarks })
           .eq('id', editingExistingQuiz.id);
 
+        const existingTitle = editingExistingQuiz.title;
         handleCancelEditingQuiz();
         await loadCourseDetails(selectedCourse.id);
-        alert(`${finalQuestions.length} additional question(s) added to "${editingExistingQuiz.title}"!`);
+        alert(
+          lang === 'ta'
+            ? `"${existingTitle}" இல் ${finalQuestions.length} கூடுதல் வினா(க்கள்) சேர்க்கப்பட்டன!`
+            : `${finalQuestions.length} additional question(s) added to "${existingTitle}"!`
+        );
       } else {
         const { data: qz, error: qzErr } = await supabase.from('quizzes').insert([{
           course_id: selectedCourse.id,
@@ -1187,7 +1842,11 @@ export default function TeacherMasterDashboard() {
 
         handleCancelEditingQuiz();
         await loadCourseDetails(selectedCourse.id);
-        alert(`${assessmentType} "${qz.title}" published successfully with ${finalQuestions.length} question(s)!`);
+        alert(
+          lang === 'ta'
+            ? `"${qz.title}" ${finalQuestions.length} வினா(க்களுடன்) வெற்றிகரமாக வெளியிடப்பட்டது!`
+            : `${assessmentType} "${qz.title}" published successfully with ${finalQuestions.length} question(s)!`
+        );
       }
     } catch (err: any) {
       alert('Error: ' + err.message);
@@ -1197,7 +1856,7 @@ export default function TeacherMasterDashboard() {
   };
 
   const handleDeleteQuiz = async (quizId: string) => {
-    if (!confirm('Are you sure you want to delete this exam/quiz and all its questions?')) return;
+    if (!confirm(t.confirmDeleteQuiz)) return;
     await supabase.from('quiz_questions').delete().eq('quiz_id', quizId);
     await supabase.from('quiz_submissions').delete().eq('quiz_id', quizId);
     await supabase.from('quizzes').delete().eq('id', quizId);
@@ -1215,7 +1874,7 @@ export default function TeacherMasterDashboard() {
     return (
       <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center text-slate-400 space-y-3">
         <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-xs font-mono">Checking admin session...</p>
+        <p className="text-xs font-mono">{t.checkingSession}</p>
       </div>
     );
   }
@@ -1225,13 +1884,29 @@ export default function TeacherMasterDashboard() {
     return (
       <div className="min-h-screen bg-[#070b14] flex flex-col justify-center items-center p-6 text-white font-sans selection:bg-purple-500 selection:text-white">
         <div className="w-full max-w-md bg-[#0c1322] border border-slate-800/90 rounded-3xl p-8 shadow-2xl space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <Link href="/" className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
               <ArrowLeft className="w-4 h-4" />
             </Link>
-            <span className="text-[11px] font-mono text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
-              Admin Access Only
-            </span>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-[#070b14] border border-slate-700 rounded-xl px-2.5 py-1.5">
+                <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                <select
+                  value={lang}
+                  onChange={(e) => handleLanguageChange(e.target.value as Lang)}
+                  aria-label="Select Language"
+                  className="bg-transparent text-xs font-bold text-slate-200 focus:outline-none cursor-pointer"
+                >
+                  <option value="en" className="bg-[#0c1322] text-white">English</option>
+                  <option value="ta" className="bg-[#0c1322] text-white">தமிழ்</option>
+                </select>
+              </div>
+
+              <span className="text-[11px] font-mono text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
+                {t.adminAccessOnly}
+              </span>
+            </div>
           </div>
 
           <div className="text-center space-y-2">
@@ -1241,7 +1916,7 @@ export default function TeacherMasterDashboard() {
               className="w-16 h-16 rounded-full object-cover bg-white p-0.5 mx-auto shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-400/50"
             />
             <h2 className="text-xl font-black text-white">Science Hub - Jaffna</h2>
-            <p className="text-xs text-slate-400">Teacher Master Login • Education changes the world</p>
+            <p className="text-xs text-slate-400">{t.portalTagline}</p>
           </div>
 
           {authError && (
@@ -1253,10 +1928,10 @@ export default function TeacherMasterDashboard() {
 
           <form onSubmit={handleTeacherLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Admin Username</label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">{t.adminUsername}</label>
               <input
                 type="text"
-                placeholder="Enter username"
+                placeholder={t.enterUsername}
                 value={teacherUser}
                 onChange={(e) => setTeacherUser(e.target.value)}
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
@@ -1265,7 +1940,7 @@ export default function TeacherMasterDashboard() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Password</label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">{t.password}</label>
               <input
                 type="password"
                 placeholder="••••••••"
@@ -1282,7 +1957,7 @@ export default function TeacherMasterDashboard() {
               className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer disabled:opacity-50"
             >
               <KeyRound className="w-4 h-4" />
-              <span>{isLoggingIn ? 'Authenticating...' : 'Sign In to Control Panel'}</span>
+              <span>{isLoggingIn ? t.authenticating : t.signInBtn}</span>
             </button>
           </form>
         </div>
@@ -1297,7 +1972,7 @@ export default function TeacherMasterDashboard() {
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans selection:bg-purple-500 selection:text-white">
       {/* Top Header */}
-      <header className="border-b border-slate-800/80 px-6 py-4 bg-[#0c1322] sticky top-0 z-30 flex items-center justify-between shadow-md">
+      <header className="border-b border-slate-800/80 px-4 md:px-6 py-4 bg-[#0c1322] sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 shadow-md">
         <div className="flex items-center gap-3">
           <Link href="/" className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
             <ArrowLeft className="w-4 h-4" />
@@ -1309,7 +1984,7 @@ export default function TeacherMasterDashboard() {
           />
           <div>
             <h1 className="font-bold text-sm tracking-wide">Science Hub - Jaffna</h1>
-            <p className="text-[10px] text-emerald-400 font-mono">Teacher Master Panel</p>
+            <p className="text-[10px] text-emerald-400 font-mono">{t.teacherMasterPanel}</p>
           </div>
         </div>
 
@@ -1321,7 +1996,7 @@ export default function TeacherMasterDashboard() {
               mainView === 'classes' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" /> Classes Hub
+            <Layers className="w-3.5 h-3.5" /> {t.classesHub}
           </button>
           <button
             onClick={() => setMainView('zoom_config')}
@@ -1329,7 +2004,7 @@ export default function TeacherMasterDashboard() {
               mainView === 'zoom_config' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            <KeyRound className="w-3.5 h-3.5" /> Zoom Account
+            <KeyRound className="w-3.5 h-3.5" /> {t.zoomAccount}
             {isZoomConfigured ? (
               <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
             ) : (
@@ -1338,17 +2013,32 @@ export default function TeacherMasterDashboard() {
           </button>
         </div>
 
+        {/* Right Controls: Language Switcher + Student View + Logout */}
         <div className="flex items-center gap-2.5">
-          <Link href="/student" target="_blank" className="hidden sm:flex px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300 transition items-center gap-2">
-            <span>Student View</span>
+          <div className="flex items-center gap-1.5 bg-[#070b14] border border-slate-700 hover:border-emerald-500/50 rounded-xl px-3 py-2 transition">
+            <Globe className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+            <select
+              value={lang}
+              onChange={(e) => handleLanguageChange(e.target.value as Lang)}
+              aria-label="Select Language"
+              className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
+            >
+              <option value="en" className="bg-[#0c1322] text-white">English</option>
+              <option value="ta" className="bg-[#0c1322] text-white">தமிழ்</option>
+            </select>
+          </div>
+
+          <Link href="/student" target="_blank" className="hidden lg:flex px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300 transition items-center gap-2">
+            <span>{t.studentView}</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </Link>
+
           <button
             onClick={handleTeacherLogout}
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-red-600 hover:text-white text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Logout</span>
+            <span>{t.logout}</span>
           </button>
         </div>
       </header>
@@ -1364,9 +2054,9 @@ export default function TeacherMasterDashboard() {
                   <KeyRound className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-white">Zoom Account Credentials</h2>
+                  <h2 className="text-lg font-bold text-white">{t.zoomCredsTitle}</h2>
                   <p className="text-xs text-slate-400 leading-relaxed mt-1">
-                    Enter and save your Zoom Server-to-Server OAuth Account ID, Client ID, and Client Secret here.
+                    {t.zoomCredsDesc}
                   </p>
                 </div>
               </div>
@@ -1374,27 +2064,27 @@ export default function TeacherMasterDashboard() {
               {isZoomConfigured && (
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                  <span>Zoom Account connected successfully!</span>
+                  <span>{t.zoomConnected}</span>
                 </div>
               )}
 
               <form onSubmit={handleSaveZoomSettings} className="space-y-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">Zoom Account ID</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">{t.zoomAccountId}</label>
                   <input
                     type="text" value={zoomAccountId} onChange={(e) => setZoomAccountId(e.target.value)}
                     placeholder="kH9bXyZ..." className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">Client ID</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">{t.clientId}</label>
                   <input
                     type="text" value={zoomClientId} onChange={(e) => setZoomClientId(e.target.value)}
                     placeholder="7abcDefGhi..." className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">Client Secret</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">{t.clientSecret}</label>
                   <input
                     type="password" value={zoomClientSecret} onChange={(e) => setZoomClientSecret(e.target.value)}
                     placeholder="••••••••••••••••••••••••" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" required
@@ -1405,7 +2095,7 @@ export default function TeacherMasterDashboard() {
                   className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                 >
                   {isSavingZoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  <span>Save Zoom Credentials</span>
+                  <span>{t.saveZoomCreds}</span>
                 </button>
               </form>
             </div>
@@ -1415,26 +2105,26 @@ export default function TeacherMasterDashboard() {
         {/* ALL CLASSES LIST */}
         {mainView === 'classes' && !selectedCourse && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-black">Science Hub - Jaffna Classes</h2>
-                <p className="text-xs text-slate-400">Select a class to manage Zoom meetings, students, recordings, and tutes.</p>
+                <h2 className="text-xl font-black">{t.hubClassesTitle}</h2>
+                <p className="text-xs text-slate-400">{t.hubClassesDesc}</p>
               </div>
               <button
                 onClick={() => setShowCreateModal(true)}
                 className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-2xl transition flex items-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer"
               >
-                <Plus className="w-4 h-4" /> Create New Class
+                <Plus className="w-4 h-4" /> {t.createNewClass}
               </button>
             </div>
 
             {loading ? (
               <div className="p-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading classes...
+                <Loader2 className="w-4 h-4 animate-spin" /> {t.loadingClasses}
               </div>
             ) : courses.length === 0 ? (
               <div className="border border-dashed border-slate-800 rounded-3xl p-12 text-center text-slate-500 text-xs">
-                No classes created yet. Click &quot;Create New Class&quot; to get started.
+                {t.noClassesYet}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1452,11 +2142,11 @@ export default function TeacherMasterDashboard() {
                         onClick={() => openCourseManager(c)}
                         className="flex-1 py-2.5 bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        <Settings className="w-3.5 h-3.5" /> Manage Class Hub
+                        <Settings className="w-3.5 h-3.5" /> {t.manageClassHub}
                       </button>
                       <button
                         onClick={() => handleDeleteCourse(c.id, c.title)}
-                        title="Delete Class"
+                        title={t.deleteClassTitle}
                         className="p-2.5 bg-slate-800/80 hover:bg-red-600/20 text-slate-400 hover:text-red-400 rounded-xl transition cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1475,7 +2165,7 @@ export default function TeacherMasterDashboard() {
             <div className="bg-[#0c1322] p-6 rounded-3xl border border-slate-800/80 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <button onClick={() => setSelectedCourse(null)} className="text-xs text-purple-400 hover:underline mb-1 flex items-center gap-1 cursor-pointer">
-                  ← Back to all classes
+                  {t.backToAllClasses}
                 </button>
                 <h2 className="text-xl font-black text-white">{selectedCourse.title}</h2>
                 <span className="text-xs text-slate-400">{selectedCourse.grade} • {selectedCourse.class_type}</span>
@@ -1483,7 +2173,7 @@ export default function TeacherMasterDashboard() {
 
               {activeMeeting && (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold animate-pulse">
-                  <Radio className="w-3.5 h-3.5" /> Live Meeting Active
+                  <Radio className="w-3.5 h-3.5" /> {t.liveMeetingActive}
                 </span>
               )}
             </div>
@@ -1492,47 +2182,47 @@ export default function TeacherMasterDashboard() {
             <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('zoom')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'zoom' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Video className="w-4 h-4" /> Live Zoom Class
+                <Video className="w-4 h-4" /> {t.tabZoom}
               </button>
 
               <button
                 onClick={() => setActiveTab('students')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'students' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Users className="w-4 h-4" /> Student Management ({students.length})
+                <Users className="w-4 h-4" /> {t.tabStudents} ({students.length})
               </button>
 
               <button
                 onClick={() => setActiveTab('recordings')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'recordings' ? 'bg-red-600 text-white shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <PlaySquare className="w-4 h-4" /> Lesson Recordings ({recordings.length})
+                <PlaySquare className="w-4 h-4" /> {t.tabRecordings} ({recordings.length})
               </button>
 
               <button
                 onClick={() => setActiveTab('content')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'content' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <BookOpen className="w-4 h-4" /> Tutes &amp; Notes ({materials.length})
+                <BookOpen className="w-4 h-4" /> {t.tabContent} ({materials.length})
               </button>
 
               <button
                 onClick={() => setActiveTab('quizzes')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'quizzes' ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <HelpCircle className="w-4 h-4" /> Exams &amp; Quizzes ({quizzes.length})
+                <HelpCircle className="w-4 h-4" /> {t.tabQuizzes} ({quizzes.length})
               </button>
             </div>
 
@@ -1542,27 +2232,27 @@ export default function TeacherMasterDashboard() {
                 <form onSubmit={handleCreateZoomMeeting} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                   <div className="flex items-center gap-2">
                     <Video className="w-5 h-5 text-blue-400" />
-                    <h3 className="font-bold text-sm text-white">Create Protected Zoom Meeting</h3>
+                    <h3 className="font-bold text-sm text-white">{t.createZoomMeetingTitle}</h3>
                   </div>
 
                   <div className="space-y-3 pt-2">
                     <div>
-                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Class Topic</label>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.classTopic}</label>
                       <input
                         type="text" value={meetingTopic} onChange={(e) => setMeetingTopic(e.target.value)}
-                        placeholder="e.g. Unit 05 Discussion" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
+                        placeholder={t.classTopicPlaceholder} className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Total Duration (Minutes)</label>
+                        <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.totalDurationMins}</label>
                         <input
                           type="number" min="10" value={meetingDuration} onChange={(e) => setMeetingDuration(e.target.value)}
                           placeholder="120" className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] text-emerald-400 font-semibold mb-1 block">Min. Attendance Stay (Mins)</label>
+                        <label className="text-[11px] text-emerald-400 font-semibold mb-1 block">{t.minAttendanceStay}</label>
                         <input
                           type="number" min="1" value={minAttendanceMins} onChange={(e) => setMinAttendanceMins(e.target.value)}
                           placeholder="30" className="w-full bg-[#070b14] border border-emerald-500/40 rounded-xl px-4 py-2.5 text-xs text-white" required
@@ -1570,7 +2260,7 @@ export default function TeacherMasterDashboard() {
                       </div>
                     </div>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      * Anti-Link-Sharing &amp; Waiting Room enabled: Only enrolled, approved students logged in from their 1-device-locked LMS account can enter. Students leaving before <strong>{minAttendanceMins || 30} mins</strong> are not marked Present.
+                      {t.zoomSecurityNote(minAttendanceMins)}
                     </p>
                   </div>
 
@@ -1579,29 +2269,29 @@ export default function TeacherMasterDashboard() {
                     className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/30 disabled:opacity-50"
                   >
                     {isCreatingMeeting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
-                    <span>{isCreatingMeeting ? 'Creating Protected Meeting...' : 'Generate Protected Zoom Meeting'}</span>
+                    <span>{isCreatingMeeting ? t.creatingMeeting : t.generateZoomMeeting}</span>
                   </button>
                 </form>
 
                 <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl flex flex-col justify-between">
                   <div>
                     <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                      <Radio className="w-4 h-4 text-emerald-400" /> Active Zoom Details
+                      <Radio className="w-4 h-4 text-emerald-400" /> {t.activeZoomDetails}
                     </h3>
 
                     {activeMeeting ? (
                       <div className="mt-4 space-y-4">
                         <div className="p-4 rounded-2xl bg-[#131c31] border border-slate-700/50 space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Topic</span>
+                            <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">{t.topicLabel}</span>
                             <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                              Min Stay: {activeMeeting.min_attendance_minutes || 30}m
+                              {t.minStayBadge}: {activeMeeting.min_attendance_minutes || 30}m
                             </span>
                           </div>
                           <h4 className="text-sm font-bold text-white">{activeMeeting.topic}</h4>
                           <div className="flex gap-4 pt-1 font-mono text-xs text-slate-300">
                             <span>ID: <strong className="text-white">{activeMeeting.meeting_id || 'N/A'}</strong></span>
-                            <span>Pass: <strong className="text-emerald-400">{activeMeeting.password || 'None'}</strong></span>
+                            <span>{t.passLabel}: <strong className="text-emerald-400">{activeMeeting.password || 'None'}</strong></span>
                           </div>
                         </div>
 
@@ -1610,13 +2300,13 @@ export default function TeacherMasterDashboard() {
                             href={activeMeeting.start_url} target="_blank" rel="noreferrer"
                             className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
                           >
-                            <ExternalLink className="w-4 h-4" /> Start Class as Host
+                            <ExternalLink className="w-4 h-4" /> {t.startClassAsHost}
                           </a>
                           <button
                             onClick={handleCopyWhatsAppText}
                             className="w-full py-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
                           >
-                            <Share2 className="w-4 h-4" /> Copy Protected LMS Class Notice
+                            <Share2 className="w-4 h-4" /> {t.copyProtectedNotice}
                           </button>
                           <button
                             type="button"
@@ -1625,13 +2315,13 @@ export default function TeacherMasterDashboard() {
                             className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-blue-600/20 border border-slate-700 hover:border-blue-500/40 text-slate-300 hover:text-blue-300 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
                           >
                             <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAttendance ? 'animate-spin' : ''}`} />
-                            <span>{isSyncingAttendance ? 'Syncing Zoom Server Logs...' : 'Sync Real Zoom Attendance Logs'}</span>
+                            <span>{isSyncingAttendance ? t.syncingZoomLogs : t.syncZoomLogs}</span>
                           </button>
                         </div>
                       </div>
                     ) : (
                       <div className="mt-12 text-center text-slate-500 text-xs">
-                        <p>No Zoom meeting has been created for this class yet.</p>
+                        <p>{t.noZoomMeetingYet}</p>
                       </div>
                     )}
                   </div>
@@ -1646,22 +2336,22 @@ export default function TeacherMasterDashboard() {
                   {/* Enroll form */}
                   <form onSubmit={handleAddStudent} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
                     <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-purple-400" /> Enroll New Student
+                      <Plus className="w-4 h-4 text-purple-400" /> {t.enrollNewStudent}
                     </h3>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Enter the student&apos;s name and WhatsApp number. Username and password will be auto-generated.
+                      {t.enrollDesc}
                     </p>
 
                     <div>
-                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Full Name</label>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.fullName}</label>
                       <input
-                        type="text" placeholder="e.g. Kasun Madushanka" value={studentName} onChange={(e) => setStudentName(e.target.value)}
+                        type="text" placeholder={t.fullNamePlaceholder} value={studentName} onChange={(e) => setStudentName(e.target.value)}
                         className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                       />
                     </div>
 
                     <div>
-                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">WhatsApp Number</label>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.whatsappNumber}</label>
                       <input
                         type="text" placeholder="0771234567" value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)}
                         className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
@@ -1669,39 +2359,39 @@ export default function TeacherMasterDashboard() {
                     </div>
 
                     <div>
-                      <label className="text-[11px] text-slate-400 font-semibold mb-1 block">Index Number (Optional)</label>
+                      <label className="text-[11px] text-slate-400 font-semibold mb-1 block">{t.indexOptional}</label>
                       <input
-                        type="text" placeholder="Leave blank to auto-generate" value={studentIndex} onChange={(e) => setStudentIndex(e.target.value)}
+                        type="text" placeholder={t.indexPlaceholder} value={studentIndex} onChange={(e) => setStudentIndex(e.target.value)}
                         className="w-full bg-[#070b14] border border-slate-700/60 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-600"
                       />
                     </div>
 
                     <div>
-                      <label className="text-[11px] text-slate-400 font-semibold mb-1 block">Custom Password (Optional)</label>
+                      <label className="text-[11px] text-slate-400 font-semibold mb-1 block">{t.customPassOptional}</label>
                       <input
-                        type="text" placeholder="Leave blank for a 6-digit PIN" value={studentCustomPass} onChange={(e) => setStudentCustomPass(e.target.value)}
+                        type="text" placeholder={t.customPassPlaceholder} value={studentCustomPass} onChange={(e) => setStudentCustomPass(e.target.value)}
                         className="w-full bg-[#070b14] border border-slate-700/60 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-600"
                       />
                     </div>
 
                     <button type="submit" className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-purple-600/30">
-                      Enroll &amp; Generate Login Credentials
+                      {t.enrollGenerateBtn}
                     </button>
                   </form>
 
-                  {/* Enrolled Students List with Flexible Access Control + Performance Report Button */}
+                  {/* Enrolled Students List */}
                   <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                        <Users className="w-4 h-4 text-purple-400" /> Enrolled Students &amp; Parent Reports
+                        <Users className="w-4 h-4 text-purple-400" /> {t.enrolledStudentsTitle}
                       </h3>
                       <span className="text-xs text-slate-400">
-                        {students.length} Total {currentMonth ? `• ${formatMonthLabel(currentMonth)}` : ''}
+                        {students.length} {t.totalLabel} {currentMonth ? `• ${formatMonthLabel(currentMonth, lang)}` : ''}
                       </span>
                     </div>
 
                     {students.length === 0 ? (
-                      <p className="text-xs text-slate-500 py-8 text-center">No students enrolled yet.</p>
+                      <p className="text-xs text-slate-500 py-8 text-center">{t.noStudentsYet}</p>
                     ) : (
                       <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
                         {students.map((st) => {
@@ -1716,33 +2406,33 @@ export default function TeacherMasterDashboard() {
                                   <h4 className="font-bold text-sm text-white">{st.full_name}</h4>
                                   {st.is_free_card ? (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                                      Free Card
+                                      {t.freeCardBadge}
                                     </span>
                                   ) : st.is_current_month_paid ? (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                      Paid ({currentMonth}) {isAdvanceWindow ? '• Next Month Open' : ''}
+                                      {t.paidBadge} ({currentMonth}) {isAdvanceWindow ? `• ${t.nextMonthOpen}` : ''}
                                     </span>
                                   ) : hasExt ? (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
-                                      Extended until {st.access_until}
+                                      {t.extendedUntil} {st.access_until}
                                     </span>
                                   ) : inGrace ? (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                                      Grace Period (1st–5th)
+                                      {t.gracePeriodBadge}
                                     </span>
                                   ) : (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
-                                      Payment Due (Locked)
+                                      {t.paymentDueLocked}
                                     </span>
                                   )}
                                 </div>
                                 
                                 <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
                                   <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-purple-400">
-                                    User: <strong>{st.index_number}</strong>
+                                    {t.userLabel}: <strong>{st.index_number}</strong>
                                   </span>
                                   <span className="bg-[#070b14] px-2.5 py-1 rounded-lg border border-slate-700 text-emerald-400 flex items-center gap-1">
-                                    <Key className="w-3 h-3" /> Pass: <strong>{st.password || st.whatsapp_number || '123456'}</strong>
+                                    <Key className="w-3 h-3" /> {t.passShortLabel}: <strong>{st.password || st.whatsapp_number || '123456'}</strong>
                                   </span>
                                   <span className="text-slate-400 text-[11px]">
                                     📱 {st.whatsapp_number}
@@ -1750,42 +2440,38 @@ export default function TeacherMasterDashboard() {
                                 </div>
                               </div>
 
-                              {/* Actions: Access Override + View Report + Copy Login + Device Unlock */}
+                              {/* Actions */}
                               <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   onClick={() => handleOpenAccessModal(st)}
-                                  title="Manually mark paid, extend access date, or set Free Card"
                                   className="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
                                 >
                                   <ShieldCheck className="w-3.5 h-3.5" />
-                                  <span>Access</span>
+                                  <span>{t.btnAccess}</span>
                                 </button>
 
                                 <button
                                   onClick={() => handleOpenStudentReport(st)}
-                                  title="View progress charts, monthly comparison, exam remarks, and export PDF report"
                                   className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-blue-600/30"
                                 >
                                   <BarChart3 className="w-3.5 h-3.5" />
-                                  <span>Report</span>
+                                  <span>{t.btnReport}</span>
                                 </button>
 
                                 <button
                                   onClick={() => handleCopyStudentLogin(st)}
-                                  title="Copy login details WhatsApp message"
                                   className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
                                 >
                                   <Copy className="w-3.5 h-3.5" />
-                                  <span>Login</span>
+                                  <span>{t.btnLogin}</span>
                                 </button>
 
                                 <button
                                   onClick={() => handleUnlockDevice(st.id)}
-                                  title="Reset device lock to allow student to log in from a new device"
                                   className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-slate-900 border border-amber-500/30 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
                                 >
                                   <Unlock className="w-3.5 h-3.5" />
-                                  <span>Unlock</span>
+                                  <span>{t.btnUnlock}</span>
                                 </button>
                               </div>
                             </div>
@@ -1798,22 +2484,28 @@ export default function TeacherMasterDashboard() {
 
                 {/* Bank Slips & Payment Approvals Section */}
                 <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-emerald-400" /> Student Bank Slips &amp; Payment Status
+                        <CreditCard className="w-4 h-4 text-emerald-400" /> {t.slipsSectionTitle}
                       </h3>
-                      <p className="text-xs text-slate-400">Review student bank slips by billing month and approve or reject payments.</p>
+                      <p className="text-xs text-slate-400">{t.slipsSectionDesc}</p>
                     </div>
-                    <span className="text-xs font-mono font-bold text-emerald-400">{slips.length} Slips Recorded</span>
+                    <span className="text-xs font-mono font-bold text-emerald-400">{slips.length} {t.slipsRecorded}</span>
                   </div>
 
                   {slips.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-6 text-center">No bank slips submitted yet.</p>
+                    <p className="text-xs text-slate-500 py-6 text-center">{t.noSlipsYet}</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {slips.map((slp) => {
                         const isManualEntry = slp.slip_url === 'MANUAL_TEACHER_APPROVAL';
+                        const statusLabel =
+                          slp.status === 'Approved'
+                            ? t.statusApproved
+                            : slp.status === 'Rejected'
+                            ? t.statusRejected
+                            : t.statusPending;
 
                         return (
                           <div key={slp.id} className="p-4 bg-[#131c31] border border-slate-700/60 rounded-2xl space-y-3">
@@ -1824,7 +2516,7 @@ export default function TeacherMasterDashboard() {
                                   <span className="text-[10px] text-slate-400 font-mono">ID: {slp.students?.index_number}</span>
                                   {slp.billing_month && (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                                      {formatMonthLabel(slp.billing_month)}
+                                      {formatMonthLabel(slp.billing_month, lang)}
                                     </span>
                                   )}
                                 </div>
@@ -1834,7 +2526,7 @@ export default function TeacherMasterDashboard() {
                                 slp.status === 'Rejected' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
                                 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                               }`}>
-                                {slp.status}
+                                {statusLabel}
                               </span>
                             </div>
 
@@ -1842,7 +2534,7 @@ export default function TeacherMasterDashboard() {
                               {isManualEntry ? (
                                 <div className="text-xs text-emerald-300 flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800">
                                   <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                                  <span className="truncate">Manual Teacher Approval (No Slip)</span>
+                                  <span className="truncate">{t.manualTeacherApproval}</span>
                                 </div>
                               ) : (
                                 <a
@@ -1850,7 +2542,7 @@ export default function TeacherMasterDashboard() {
                                   className="text-xs text-blue-400 hover:underline flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800"
                                 >
                                   <FileText className="w-4 h-4 flex-shrink-0" />
-                                  <span className="truncate">View Uploaded Slip ➔</span>
+                                  <span className="truncate">{t.viewUploadedSlip}</span>
                                 </a>
                               )}
                             </div>
@@ -1861,13 +2553,13 @@ export default function TeacherMasterDashboard() {
                                   onClick={() => handleUpdateSlipStatus(slp.id, 'Approved')}
                                   className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                                 >
-                                  Approve
+                                  {t.approveBtn}
                                 </button>
                                 <button
                                   onClick={() => handleUpdateSlipStatus(slp.id, 'Rejected')}
                                   className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white font-bold text-xs rounded-xl transition cursor-pointer"
                                 >
-                                  Reject
+                                  {t.rejectBtn}
                                 </button>
                               </div>
                             )}
@@ -1886,22 +2578,22 @@ export default function TeacherMasterDashboard() {
                 <form onSubmit={handleAddRecording} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
                   <div className="flex items-center gap-2">
                     <PlaySquare className="w-5 h-5 text-red-400" />
-                    <h3 className="font-bold text-sm text-white">Add Past Lesson Recording</h3>
+                    <h3 className="font-bold text-sm text-white">{t.addRecordingTitle}</h3>
                   </div>
                   <p className="text-xs text-slate-400">
-                    Enter the YouTube video link or video ID for the class lesson recording (set video to Unlisted on YouTube for privacy).
+                    {t.addRecordingDesc}
                   </p>
 
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Lesson Title</label>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.lessonTitle}</label>
                       <input
-                        type="text" placeholder="e.g. Lesson 01 - Theory Revision" value={recordingTitle}
+                        type="text" placeholder={t.lessonTitlePlaceholder} value={recordingTitle}
                         onChange={(e) => setRecordingTitle(e.target.value)} className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">YouTube Video ID / URL</label>
+                      <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.youtubeIdLabel}</label>
                       <input
                         type="text" placeholder="e.g. https://youtu.be/dQw4w9WgXcQ" value={recordingId}
                         onChange={(e) => setRecordingId(e.target.value)} className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
@@ -1910,17 +2602,17 @@ export default function TeacherMasterDashboard() {
                   </div>
 
                   <button type="submit" className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-red-600/30">
-                    Add Recording
+                    {t.addRecordingBtn}
                   </button>
                 </form>
 
                 <div className="lg:col-span-2 bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl">
                   <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                    <PlaySquare className="w-4 h-4 text-red-400" /> Uploaded Recordings ({recordings.length})
+                    <PlaySquare className="w-4 h-4 text-red-400" /> {t.uploadedRecordings} ({recordings.length})
                   </h3>
 
                   {recordings.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-8 text-center">No recordings added yet.</p>
+                    <p className="text-xs text-slate-500 py-8 text-center">{t.noRecordingsYet}</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {recordings.map((rec) => (
@@ -1932,7 +2624,7 @@ export default function TeacherMasterDashboard() {
                               href={`https://youtube.com/watch?v=${rec.youtube_video_id}`} target="_blank" rel="noreferrer"
                               className="text-xs text-red-400 hover:underline flex items-center gap-1"
                             >
-                              <ExternalLink className="w-3.5 h-3.5" /> Watch on YouTube
+                              <ExternalLink className="w-3.5 h-3.5" /> {t.watchOnYoutube}
                             </a>
                             <button
                               onClick={() => handleDeleteRecording(rec.id)}
@@ -1953,16 +2645,16 @@ export default function TeacherMasterDashboard() {
             {activeTab === 'content' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <form onSubmit={handleAddMaterial} className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
-                  <h3 className="font-bold text-sm text-white">Upload New Tute / PDF</h3>
+                  <h3 className="font-bold text-sm text-white">{t.uploadNewTute}</h3>
                   <div>
-                    <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Tute Title</label>
+                    <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.tuteTitle}</label>
                     <input
-                      type="text" placeholder="e.g. Unit 01 Study Notes" value={materialTitle} onChange={(e) => setMaterialTitle(e.target.value)}
+                      type="text" placeholder={t.tuteTitlePlaceholder} value={materialTitle} onChange={(e) => setMaterialTitle(e.target.value)}
                       className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Select PDF / Document File</label>
+                    <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.selectPdfFile}</label>
                     <input
                       type="file"
                       accept=".pdf,.doc,.docx,image/*"
@@ -1977,23 +2669,22 @@ export default function TeacherMasterDashboard() {
                     className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isUploadingMaterial ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    <span>{isUploadingMaterial ? 'Uploading Tute...' : 'Upload PDF Material'}</span>
+                    <span>{isUploadingMaterial ? t.uploadingTute : t.uploadPdfMaterial}</span>
                   </button>
                 </form>
 
                 <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-3 shadow-xl">
-                  <h3 className="font-bold text-sm text-white">Active Tutes ({materials.length})</h3>
+                  <h3 className="font-bold text-sm text-white">{t.activeTutes} ({materials.length})</h3>
                   {materials.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-6 text-center">No tutes uploaded yet.</p>
+                    <p className="text-xs text-slate-500 py-6 text-center">{t.noTutesYet}</p>
                   ) : (
                     materials.map(m => (
                       <div key={m.id} className="p-3 bg-[#131c31] border border-slate-700/50 rounded-xl flex items-center justify-between gap-3">
                         <span className="text-xs text-white font-medium truncate">{m.title}</span>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <a href={m.file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">Download ➔</a>
+                          <a href={m.file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:underline">{t.downloadArrow}</a>
                           <button
                             onClick={() => handleDeleteMaterial(m.id)}
-                            title="Delete Tute"
                             className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 transition cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -2014,13 +2705,13 @@ export default function TeacherMasterDashboard() {
                     <div className="flex items-center gap-2">
                       <HelpCircle className="w-5 h-5 text-amber-400" />
                       <h3 className="font-bold text-sm text-white">
-                        {editingExistingQuiz ? `Add More Questions to: ${editingExistingQuiz.title}` : 'Create Online Exam or Timed Quiz'}
+                        {editingExistingQuiz ? `${t.addMoreQuestionsTo} ${editingExistingQuiz.title}` : t.createExamOrQuiz}
                       </h3>
                     </div>
 
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                        {quizQuestionsList.length} Question(s) Queued
+                        {quizQuestionsList.length} {t.questionsQueued}
                       </span>
                       {editingExistingQuiz && (
                         <button
@@ -2028,7 +2719,7 @@ export default function TeacherMasterDashboard() {
                           onClick={handleCancelEditingQuiz}
                           className="text-[11px] font-bold text-slate-400 hover:text-white bg-slate-800 px-2.5 py-1 rounded-lg cursor-pointer"
                         >
-                          Cancel Add
+                          {t.cancelAdd}
                         </button>
                       )}
                     </div>
@@ -2038,7 +2729,7 @@ export default function TeacherMasterDashboard() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[11px] text-slate-300 font-semibold mb-1.5 block">Assessment Mode</label>
+                          <label className="text-[11px] text-slate-300 font-semibold mb-1.5 block">{t.assessmentMode}</label>
                           <div className="grid grid-cols-2 gap-1.5 bg-[#070b14] p-1 rounded-xl border border-slate-800">
                             <button
                               type="button"
@@ -2047,7 +2738,7 @@ export default function TeacherMasterDashboard() {
                                 assessmentType === 'Online Exam' ? 'bg-red-600 text-white shadow' : 'text-slate-400 hover:text-white'
                               }`}
                             >
-                              Strict Online Exam
+                              {t.strictOnlineExam}
                             </button>
                             <button
                               type="button"
@@ -2056,13 +2747,13 @@ export default function TeacherMasterDashboard() {
                                 assessmentType === 'Quiz' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-white'
                               }`}
                             >
-                              Practice Quiz
+                              {t.practiceQuiz}
                             </button>
                           </div>
                         </div>
 
                         <div>
-                          <label className="text-[11px] text-slate-300 font-semibold mb-1.5 block">Timer Rule</label>
+                          <label className="text-[11px] text-slate-300 font-semibold mb-1.5 block">{t.timerRule}</label>
                           <div className="grid grid-cols-2 gap-1.5 bg-[#070b14] p-1 rounded-xl border border-slate-800">
                             <button
                               type="button"
@@ -2071,7 +2762,7 @@ export default function TeacherMasterDashboard() {
                                 timerMode === 'whole_exam' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'
                               }`}
                             >
-                              Whole Exam Time
+                              {t.wholeExamTime}
                             </button>
                             <button
                               type="button"
@@ -2080,7 +2771,7 @@ export default function TeacherMasterDashboard() {
                                 timerMode === 'per_question' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
                               }`}
                             >
-                              Per-Question Time
+                              {t.perQuestionTime}
                             </button>
                           </div>
                         </div>
@@ -2088,10 +2779,10 @@ export default function TeacherMasterDashboard() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="sm:col-span-2">
-                          <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Exam / Quiz Title</label>
+                          <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.examQuizTitle}</label>
                           <input
                             type="text"
-                            placeholder="e.g. Mid Exam - Term 01"
+                            placeholder={t.examTitlePlaceholder}
                             value={quizTitle}
                             onChange={(e) => setQuizTitle(e.target.value)}
                             className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
@@ -2101,7 +2792,7 @@ export default function TeacherMasterDashboard() {
 
                         {timerMode === 'whole_exam' ? (
                           <div>
-                            <label className="text-[11px] text-slate-300 font-semibold mb-1 block">Total Time (Minutes)</label>
+                            <label className="text-[11px] text-slate-300 font-semibold mb-1 block">{t.totalTimeMins}</label>
                             <input
                               type="number"
                               min="1"
@@ -2114,7 +2805,7 @@ export default function TeacherMasterDashboard() {
                           </div>
                         ) : (
                           <div>
-                            <label className="text-[11px] text-blue-400 font-semibold mb-1 block">Seconds Per Question</label>
+                            <label className="text-[11px] text-blue-400 font-semibold mb-1 block">{t.secondsPerQuestion}</label>
                             <input
                               type="number"
                               min="10"
@@ -2131,9 +2822,7 @@ export default function TeacherMasterDashboard() {
                       {assessmentType === 'Online Exam' && (
                         <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-[11px] text-red-300 flex items-center gap-2">
                           <ShieldAlert className="w-4 h-4 text-red-400 flex-shrink-0" />
-                          <span>
-                            Strict Anti-Cheat Enabled: Tab-switch strike auto-submit, copy/paste block, dynamic student watermark, question shuffle, and 1-attempt limit.
-                          </span>
+                          <span>{t.antiCheatNote}</span>
                         </div>
                       )}
                     </div>
@@ -2142,7 +2831,7 @@ export default function TeacherMasterDashboard() {
                   <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-200">Question #{quizQuestionsList.length + 1}</span>
+                        <span className="text-xs font-bold text-slate-200">{t.questionNum} #{quizQuestionsList.length + 1}</span>
                         <div className="flex items-center bg-[#0c1322] p-0.5 rounded-lg border border-slate-700">
                           <button
                             type="button"
@@ -2151,7 +2840,7 @@ export default function TeacherMasterDashboard() {
                               questionType === 'mcq' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
                             }`}
                           >
-                            MCQ (4 Options)
+                            {t.mcq4Options}
                           </button>
                           <button
                             type="button"
@@ -2160,13 +2849,13 @@ export default function TeacherMasterDashboard() {
                               questionType === 'free_answer' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
                             }`}
                           >
-                            Free Answer
+                            {t.freeAnswer}
                           </button>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-400">Marks:</span>
+                        <span className="text-[11px] text-slate-400">{t.marksLabel}</span>
                         <input
                           type="number"
                           min="1"
@@ -2179,7 +2868,7 @@ export default function TeacherMasterDashboard() {
 
                     <input
                       type="text"
-                      placeholder="Enter question text..."
+                      placeholder={t.enterQuestionText}
                       value={qText}
                       onChange={(e) => setQText(e.target.value)}
                       className="w-full bg-[#0c1322] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
@@ -2190,28 +2879,28 @@ export default function TeacherMasterDashboard() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           <input
                             type="text"
-                            placeholder="Option 1"
+                            placeholder={`${t.optionLabel} 1`}
                             value={opt0}
                             onChange={(e) => setOpt0(e.target.value)}
                             className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                           />
                           <input
                             type="text"
-                            placeholder="Option 2"
+                            placeholder={`${t.optionLabel} 2`}
                             value={opt1}
                             onChange={(e) => setOpt1(e.target.value)}
                             className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                           />
                           <input
                             type="text"
-                            placeholder="Option 3"
+                            placeholder={`${t.optionLabel} 3`}
                             value={opt2}
                             onChange={(e) => setOpt2(e.target.value)}
                             className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                           />
                           <input
                             type="text"
-                            placeholder="Option 4"
+                            placeholder={`${t.optionLabel} 4`}
                             value={opt3}
                             onChange={(e) => setOpt3(e.target.value)}
                             className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -2220,16 +2909,16 @@ export default function TeacherMasterDashboard() {
 
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
                           <div className="flex items-center gap-2">
-                            <label className="text-[11px] font-semibold text-emerald-400">Correct Answer:</label>
+                            <label className="text-[11px] font-semibold text-emerald-400">{t.correctAnswer}</label>
                             <select
                               value={correctOpt}
                               onChange={(e) => setCorrectOpt(e.target.value)}
                               className="bg-[#0c1322] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
                             >
-                              <option value="0">Option 1</option>
-                              <option value="1">Option 2</option>
-                              <option value="2">Option 3</option>
-                              <option value="3">Option 4</option>
+                              <option value="0">{t.optionLabel} 1</option>
+                              <option value="1">{t.optionLabel} 2</option>
+                              <option value="2">{t.optionLabel} 3</option>
+                              <option value="3">{t.optionLabel} 4</option>
                             </select>
                           </div>
 
@@ -2238,7 +2927,7 @@ export default function TeacherMasterDashboard() {
                             onClick={handleAddQuestionToList}
                             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-purple-600 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <Plus className="w-3.5 h-3.5" /> Add Question to Queue
+                            <Plus className="w-3.5 h-3.5" /> {t.addQuestionToQueue}
                           </button>
                         </div>
                       </>
@@ -2246,7 +2935,7 @@ export default function TeacherMasterDashboard() {
                       <div className="space-y-3">
                         <input
                           type="text"
-                          placeholder="Model / Expected Answer (Optional — used for auto-check or teacher review)"
+                          placeholder={t.expectedAnswerPlaceholder}
                           value={sampleAnswer}
                           onChange={(e) => setSampleAnswer(e.target.value)}
                           className="w-full bg-[#0c1322] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
@@ -2257,7 +2946,7 @@ export default function TeacherMasterDashboard() {
                             onClick={handleAddQuestionToList}
                             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-emerald-600 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <Plus className="w-3.5 h-3.5" /> Add Free Answer Question
+                            <Plus className="w-3.5 h-3.5" /> {t.addFreeAnswerQuestion}
                           </button>
                         </div>
                       </div>
@@ -2266,7 +2955,7 @@ export default function TeacherMasterDashboard() {
 
                   {quizQuestionsList.length > 0 && (
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      <span className="text-[11px] font-bold text-slate-400 block">Questions Queue ({quizQuestionsList.length}):</span>
+                      <span className="text-[11px] font-bold text-slate-400 block">{t.questionsQueueLabel} ({quizQuestionsList.length}):</span>
                       {quizQuestionsList.map((item, idx) => (
                         <div key={idx} className="p-3 rounded-xl bg-[#131c31] border border-slate-700/60 flex items-center justify-between gap-3">
                           <div className="min-w-0">
@@ -2275,9 +2964,9 @@ export default function TeacherMasterDashboard() {
                             </p>
                             <span className="text-[10px] text-emerald-400 font-mono">
                               {item.question_type === 'mcq'
-                                ? `MCQ • Correct: Option ${item.correct_option + 1} (${item.options[item.correct_option]})`
-                                : `Free Answer${item.sample_answer ? ` • Expected: ${item.sample_answer}` : ''}`}{' '}
-                              • {item.marks} Marks
+                                ? `MCQ • ${t.correctAnswer} ${t.optionLabel} ${item.correct_option + 1} (${item.options[item.correct_option]})`
+                                : `${t.freeAnswer}${item.sample_answer ? ` • ${t.expectedAnswerLabel}: ${item.sample_answer}` : ''}`}{' '}
+                              - {item.marks} {t.marksShort}
                             </span>
                           </div>
                           <button
@@ -2300,21 +2989,21 @@ export default function TeacherMasterDashboard() {
                     {isPublishingQuiz ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                     <span>
                       {isPublishingQuiz
-                        ? 'Saving...'
+                        ? t.saving
                         : editingExistingQuiz
-                        ? `Save & Append Questions to "${editingExistingQuiz.title}"`
-                        : `Publish ${assessmentType}`}
+                        ? `${t.saveAppendBtn} "${editingExistingQuiz.title}"`
+                        : `${t.publishBtn} ${assessmentType === 'Online Exam' ? t.strictOnlineExam : t.practiceQuiz}`}
                     </span>
                   </button>
                 </form>
 
                 <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl space-y-4 shadow-xl h-fit">
                   <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" /> Published Exams &amp; Quizzes ({quizzes.length})
+                    <Award className="w-4 h-4 text-amber-400" /> {t.publishedExamsQuizzes} ({quizzes.length})
                   </h3>
 
                   {quizzes.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-8 text-center">No exams or quizzes published yet.</p>
+                    <p className="text-xs text-slate-500 py-8 text-center">{t.noExamsYet}</p>
                   ) : (
                     <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
                       {quizzes.map((qz) => {
@@ -2333,13 +3022,12 @@ export default function TeacherMasterDashboard() {
                                       : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                   }`}
                                 >
-                                  {qz.assessment_type || 'Quiz'}
+                                  {isExam ? t.strictOnlineExam : t.practiceQuiz}
                                 </span>
                                 <h4 className="font-bold text-xs text-white line-clamp-2 pt-0.5">{qz.title}</h4>
                               </div>
                               <button
                                 onClick={() => handleDeleteQuiz(qz.id)}
-                                title="Delete Exam/Quiz"
                                 className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 transition cursor-pointer flex-shrink-0"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -2349,13 +3037,13 @@ export default function TeacherMasterDashboard() {
                             <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono text-slate-400">
                               <span className="flex items-center gap-1 bg-[#070b14] px-2 py-0.5 rounded border border-slate-800">
                                 <Clock className="w-3 h-3 text-amber-400" />
-                                {isPerQ ? `${qz.per_question_seconds || 60}s / Question` : `${qz.duration_minutes} Mins Total`}
+                                {isPerQ ? `${qz.per_question_seconds || 60}s / ${t.perQuestionShort}` : `${qz.duration_minutes} ${t.minsTotal}`}
                               </span>
                               <span className="text-purple-400 bg-[#070b14] px-2 py-0.5 rounded border border-slate-800">
-                                {qCount} Questions
+                                {qCount} {t.questionsCount}
                               </span>
                               <span className="text-emerald-400 bg-[#070b14] px-2 py-0.5 rounded border border-slate-800">
-                                {qz.total_marks || 100} Marks
+                                {qz.total_marks || 100} {t.marksShort}
                               </span>
                             </div>
 
@@ -2364,7 +3052,7 @@ export default function TeacherMasterDashboard() {
                               onClick={() => handleStartAddingMoreQuestions(qz)}
                               className="w-full py-1.5 rounded-xl bg-slate-800 hover:bg-purple-600 text-slate-300 hover:text-white text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
                             >
-                              <Plus className="w-3.5 h-3.5" /> Add More Questions
+                              <Plus className="w-3.5 h-3.5" /> {t.addMoreQuestionsBtn}
                             </button>
                           </div>
                         );
@@ -2387,7 +3075,7 @@ export default function TeacherMasterDashboard() {
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  <span>Manage Student Access &amp; Fees</span>
+                  <span>{t.manageAccessTitle}</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {selectedStudentForAccess.full_name} (<span className="font-mono text-purple-400">{selectedStudentForAccess.index_number}</span>)
@@ -2401,13 +3089,11 @@ export default function TeacherMasterDashboard() {
               </button>
             </div>
 
-            {/* Option A: Manual Mark Month as Paid (for WhatsApp slips or cash payments) */}
+            {/* Option A */}
             <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 space-y-3">
               <div>
-                <h4 className="text-xs font-bold text-white">1. Manual Payment Approval (Without Student Slip Upload)</h4>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Approve a specific billing month directly if the student sent the slip on WhatsApp or paid in cash.
-                </p>
+                <h4 className="text-xs font-bold text-white">{t.opt1Title}</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">{t.opt1Desc}</p>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2">
@@ -2418,7 +3104,7 @@ export default function TeacherMasterDashboard() {
                 >
                   {selectableMonths.map((ym) => (
                     <option key={ym} value={ym}>
-                      {formatMonthLabel(ym)}
+                      {formatMonthLabel(ym, lang)}
                     </option>
                   ))}
                 </select>
@@ -2429,19 +3115,17 @@ export default function TeacherMasterDashboard() {
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Mark Month Paid</span>
+                  <span>{t.markMonthPaid}</span>
                 </button>
               </div>
             </div>
 
-            {/* Option B & C: Temporary Extension Date & Free Card */}
+            {/* Option B & C */}
             <form onSubmit={handleSaveEnrollmentAccessRules} className="space-y-4">
               <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 space-y-3">
                 <div>
-                  <h4 className="text-xs font-bold text-white">2. Temporary Access Extension (Custom Due Date)</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Grant temporary access until a specific date (e.g. 15th of the month). Access locks automatically after that date.
-                  </p>
+                  <h4 className="text-xs font-bold text-white">{t.opt2Title}</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{t.opt2Desc}</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -2457,7 +3141,7 @@ export default function TeacherMasterDashboard() {
                       onClick={() => setExtensionDateInput(`${currentMonth}-15`)}
                       className="px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 text-[11px] font-bold transition cursor-pointer"
                     >
-                      Until 15th
+                      {t.until15th}
                     </button>
                   )}
                   {extensionDateInput && (
@@ -2466,7 +3150,7 @@ export default function TeacherMasterDashboard() {
                       onClick={() => setExtensionDateInput('')}
                       className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 text-[11px] font-bold transition cursor-pointer"
                     >
-                      Clear
+                      {t.clearBtn}
                     </button>
                   )}
                 </div>
@@ -2474,10 +3158,8 @@ export default function TeacherMasterDashboard() {
 
               <label className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 flex items-center justify-between gap-3 cursor-pointer">
                 <div>
-                  <span className="text-xs font-bold text-white block">3. Free Card (Permanent Exemption)</span>
-                  <span className="text-[11px] text-slate-400">
-                    Student retains uninterrupted access every month without payment locks.
-                  </span>
+                  <span className="text-xs font-bold text-white block">{t.opt3Title}</span>
+                  <span className="text-[11px] text-slate-400">{t.opt3Desc}</span>
                 </div>
                 <input
                   type="checkbox"
@@ -2493,14 +3175,14 @@ export default function TeacherMasterDashboard() {
                   onClick={() => setSelectedStudentForAccess(null)}
                   className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer"
                 >
-                  Cancel
+                  {t.cancel}
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingAccessOverride}
                   className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition cursor-pointer disabled:opacity-50"
                 >
-                  {isSavingAccessOverride ? 'Saving...' : 'Save Access Rules'}
+                  {isSavingAccessOverride ? t.saving : t.saveAccessRules}
                 </button>
               </div>
             </form>
@@ -2508,7 +3190,7 @@ export default function TeacherMasterDashboard() {
         </div>
       )}
 
-      {/* ================= MODAL: OFFICIAL PARENT PROGRESS REPORT WITH CHARTS, MONTH COMPARISON & PDF EXPORT ================= */}
+      {/* ================= MODAL: OFFICIAL PARENT PROGRESS REPORT ================= */}
       {selectedStudentForReport && reportAnalytics && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-y-auto p-6 md:p-8 shadow-2xl space-y-6">
@@ -2538,7 +3220,7 @@ export default function TeacherMasterDashboard() {
                   className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/30"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Download / Print Parent PDF</span>
+                  <span>{t.downloadPrintPdf}</span>
                 </button>
 
                 <button
@@ -2552,23 +3234,23 @@ export default function TeacherMasterDashboard() {
 
             {loadingReport ? (
               <div className="py-12 text-center text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Preparing official progress report...
+                <Loader2 className="w-4 h-4 animate-spin" /> {t.preparingReport}
               </div>
             ) : (
               <div className="space-y-6">
                 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Exams &amp; Quizzes</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">{t.examsQuizzesCard}</span>
                     <h4 className="text-xl font-black text-white mt-1">{studentQuizResults.length}</h4>
                   </div>
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Overall Average</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">{t.overallAverageCard}</span>
                     <h4 className="text-xl font-black text-emerald-400 mt-1">{reportAnalytics.overallAvg}%</h4>
                   </div>
                   <div className="bg-[#131c31] border border-slate-700/50 p-4 rounded-2xl text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Verified Attendance</span>
-                    <h4 className="text-xl font-black text-blue-400 mt-1">{reportAnalytics.verifiedAttendanceCount} Days</h4>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">{t.verifiedAttendanceCard}</span>
+                    <h4 className="text-xl font-black text-blue-400 mt-1">{reportAnalytics.verifiedAttendanceCount} {t.daysLabel}</h4>
                   </div>
                 </div>
 
@@ -2576,12 +3258,12 @@ export default function TeacherMasterDashboard() {
                   <div className="bg-[#070b14] border border-slate-800/90 p-5 rounded-2xl space-y-4">
                     <h4 className="text-xs font-bold text-white flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-emerald-400" />
-                      Monthly Progress ({reportAnalytics.lastMonthLabel} vs {reportAnalytics.thisMonthLabel})
+                      {t.monthlyProgressTitle} ({reportAnalytics.lastMonthLabel} vs {reportAnalytics.thisMonthLabel})
                     </h4>
 
                     <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400 font-semibold">Class Attendance</span>
+                        <span className="text-slate-400 font-semibold">{t.classAttendanceLabel}</span>
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
                             reportAnalytics.attDiff > 0
@@ -2593,15 +3275,15 @@ export default function TeacherMasterDashboard() {
                         >
                           {reportAnalytics.attDiff > 0 ? (
                             <>
-                              <TrendingUp className="w-3 h-3" /> +{reportAnalytics.attDiff} Days Improved
+                              <TrendingUp className="w-3 h-3" /> +{reportAnalytics.attDiff} {t.daysImproved}
                             </>
                           ) : reportAnalytics.attDiff < 0 ? (
                             <>
-                              <TrendingDown className="w-3 h-3" /> {reportAnalytics.attDiff} Days Lower
+                              <TrendingDown className="w-3 h-3" /> {reportAnalytics.attDiff} {t.daysLower}
                             </>
                           ) : (
                             <>
-                              <Minus className="w-3 h-3" /> Consistent
+                              <Minus className="w-3 h-3" /> {t.consistentLabel}
                             </>
                           )}
                         </span>
@@ -2610,18 +3292,18 @@ export default function TeacherMasterDashboard() {
                       <div className="grid grid-cols-2 gap-3 pt-1 font-mono text-xs">
                         <div className="bg-[#070b14] p-2.5 rounded-lg border border-slate-800/80">
                           <span className="text-[10px] text-slate-500 block">{reportAnalytics.lastMonthLabel}</span>
-                          <strong className="text-slate-200">{reportAnalytics.lastMonthAtt} Classes</strong>
+                          <strong className="text-slate-200">{reportAnalytics.lastMonthAtt} {t.classesLabel}</strong>
                         </div>
                         <div className="bg-[#070b14] p-2.5 rounded-lg border border-blue-500/30">
                           <span className="text-[10px] text-blue-400 block">{reportAnalytics.thisMonthLabel}</span>
-                          <strong className="text-white">{reportAnalytics.thisMonthAtt} Classes</strong>
+                          <strong className="text-white">{reportAnalytics.thisMonthAtt} {t.classesLabel}</strong>
                         </div>
                       </div>
                     </div>
 
                     <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400 font-semibold">Exam &amp; Quiz Average</span>
+                        <span className="text-slate-400 font-semibold">{t.examQuizAverageLabel}</span>
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
                             reportAnalytics.scoreDiff > 0
@@ -2633,15 +3315,15 @@ export default function TeacherMasterDashboard() {
                         >
                           {reportAnalytics.scoreDiff > 0 ? (
                             <>
-                              <TrendingUp className="w-3 h-3" /> +{reportAnalytics.scoreDiff}% Improved
+                              <TrendingUp className="w-3 h-3" /> +{reportAnalytics.scoreDiff}% {t.improvedLabel}
                             </>
                           ) : reportAnalytics.scoreDiff < 0 ? (
                             <>
-                              <TrendingDown className="w-3 h-3" /> {reportAnalytics.scoreDiff}% Drop
+                              <TrendingDown className="w-3 h-3" /> {reportAnalytics.scoreDiff}% {t.dropLabel}
                             </>
                           ) : (
                             <>
-                              <Minus className="w-3 h-3" /> Steady
+                              <Minus className="w-3 h-3" /> {t.steadyLabel}
                             </>
                           )}
                         </span>
@@ -2650,11 +3332,11 @@ export default function TeacherMasterDashboard() {
                       <div className="grid grid-cols-2 gap-3 pt-1 font-mono text-xs">
                         <div className="bg-[#070b14] p-2.5 rounded-lg border border-slate-800/80">
                           <span className="text-[10px] text-slate-500 block">{reportAnalytics.lastMonthLabel}</span>
-                          <strong className="text-slate-200">{reportAnalytics.lastMonthAvg}% Avg</strong>
+                          <strong className="text-slate-200">{reportAnalytics.lastMonthAvg}% {t.avgLabel}</strong>
                         </div>
                         <div className="bg-[#070b14] p-2.5 rounded-lg border border-emerald-500/30">
                           <span className="text-[10px] text-emerald-400 block">{reportAnalytics.thisMonthLabel}</span>
-                          <strong className="text-emerald-300">{reportAnalytics.thisMonthAvg}% Avg</strong>
+                          <strong className="text-emerald-300">{reportAnalytics.thisMonthAvg}% {t.avgLabel}</strong>
                         </div>
                       </div>
                     </div>
@@ -2663,14 +3345,16 @@ export default function TeacherMasterDashboard() {
                   <div className="bg-[#070b14] border border-slate-800/90 p-5 rounded-2xl flex flex-col justify-between space-y-4">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-purple-400" /> Exam Score Progression Chart
+                        <BarChart3 className="w-4 h-4 text-purple-400" /> {t.examScoreChartTitle}
                       </h4>
-                      <span className="text-[10px] text-slate-500 font-mono">Latest {reportAnalytics.chronologicalQuizzes.length} Exams</span>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {t.latestExams} {reportAnalytics.chronologicalQuizzes.length} {t.examsLabelShort}
+                      </span>
                     </div>
 
                     {reportAnalytics.chronologicalQuizzes.length === 0 ? (
                       <div className="flex-1 flex items-center justify-center text-xs text-slate-500 py-8">
-                        No exam results available to plot chart yet.
+                        {t.noChartData}
                       </div>
                     ) : (
                       <div className="flex items-end justify-between gap-2.5 h-44 pt-4 px-2 border-b border-slate-800/80">
@@ -2702,15 +3386,15 @@ export default function TeacherMasterDashboard() {
                       </div>
                     )}
 
-                    <div className="flex items-center justify-center gap-4 text-[10px] text-slate-400">
+                    <div className="flex flex-wrap items-center justify-center gap-4 text-[10px] text-slate-400">
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> 75%+ Distinction
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> {t.distinctionLabel}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-purple-400 inline-block"></span> 50-74% Merit
+                        <span className="w-2 h-2 rounded-full bg-purple-400 inline-block"></span> {t.meritLabel}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> &lt;50% Needs Focus
+                        <span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> {t.needsFocusLabel}
                       </span>
                     </div>
                   </div>
@@ -2718,12 +3402,12 @@ export default function TeacherMasterDashboard() {
 
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" /> Exam Marks, Answers &amp; Teacher Remarks
+                    <Award className="w-4 h-4 text-amber-400" /> {t.examMarksRemarksTitle}
                   </h4>
 
                   {studentQuizResults.length === 0 ? (
                     <div className="p-6 rounded-2xl bg-[#070b14] border border-slate-800 text-center text-slate-500 text-xs">
-                      This student has not taken any exams or quizzes yet.
+                      {t.noExamsAttempted}
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -2738,30 +3422,30 @@ export default function TeacherMasterDashboard() {
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                   <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                                    {res.quizzes?.assessment_type || 'Quiz'}
+                                    {res.quizzes?.assessment_type === 'Online Exam' ? t.strictOnlineExam : t.practiceQuiz}
                                   </span>
                                   <h5 className="font-bold text-xs text-white">{res.quizzes?.title || 'Online Exam'}</h5>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-mono">
                                   <span>
-                                    Date: {new Date(res.submitted_at).toLocaleDateString()} • {new Date(res.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {t.dateLabel}: {new Date(res.submitted_at).toLocaleDateString()} • {new Date(res.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                   {Number(res.tab_switches || 0) > 0 && (
                                     <span className="text-red-400 font-bold">
-                                      ⚠️ Tab Switches: {res.tab_switches}
+                                      ⚠️ {t.tabSwitches}: {res.tab_switches}
                                     </span>
                                   )}
                                 </div>
                                 {res.teacher_feedback && !isExpanded && (
                                   <p className="text-[11px] text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20 w-fit mt-1">
-                                    Remark: {res.teacher_feedback}
+                                    {t.remarkLabel}: {res.teacher_feedback}
                                   </p>
                                 )}
                               </div>
                               
                               <div className="flex items-center gap-2.5">
                                 <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
-                                  Score: {res.score} / {res.quizzes?.total_marks || 100}
+                                  {t.scoreLabel}: {res.score} / {res.quizzes?.total_marks || 100}
                                 </span>
                                 <button
                                   type="button"
@@ -2769,7 +3453,7 @@ export default function TeacherMasterDashboard() {
                                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-purple-600 text-slate-200 hover:text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
-                                  <span>{isExpanded ? 'Hide Answers' : 'Review & Remark'}</span>
+                                  <span>{isExpanded ? t.hideAnswersBtn : t.reviewRemarkBtn}</span>
                                   {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                 </button>
                               </div>
@@ -2779,11 +3463,11 @@ export default function TeacherMasterDashboard() {
                               <div className="border-t border-slate-800 bg-[#0c1322]/70 p-4 space-y-4">
                                 <div className="space-y-2.5">
                                   <span className="text-[11px] font-bold text-slate-300 block">
-                                    Student Answers Breakdown ({res.quizzes?.title}):
+                                    {t.answersBreakdown} ({res.quizzes?.title}):
                                   </span>
 
                                   {qList.length === 0 ? (
-                                    <p className="text-xs text-slate-500">Loading questions...</p>
+                                    <p className="text-xs text-slate-500">{t.loadingQuestions}</p>
                                   ) : (
                                     qList.map((qItem: any, idx: number) => {
                                       const rawAns = ansObj[qItem.id] !== undefined ? ansObj[qItem.id] : ansObj[idx];
@@ -2793,14 +3477,14 @@ export default function TeacherMasterDashboard() {
                                         return (
                                           <div key={qItem.id} className="p-3 rounded-xl bg-[#070b14] border border-slate-800 space-y-1.5">
                                             <p className="text-xs font-bold text-white">
-                                              {idx + 1}. {qItem.question_text} <span className="text-[10px] text-slate-400">({qItem.marks} Marks)</span>
+                                              {idx + 1}. {qItem.question_text} <span className="text-[10px] text-slate-400">({qItem.marks} {t.marksShort})</span>
                                             </p>
                                             <p className="text-xs text-blue-300">
-                                              Student Answer: <strong className="text-white">{rawAns || '(No answer submitted)'}</strong>
+                                              {t.studentAnswerLabel}: <strong className="text-white">{rawAns || t.noAnswerSubmitted}</strong>
                                             </p>
                                             {qItem.sample_answer && (
                                               <p className="text-[11px] text-emerald-400">
-                                                Expected Answer: {qItem.sample_answer}
+                                                {t.expectedAnswerLabel}: {qItem.sample_answer}
                                               </p>
                                             )}
                                           </div>
@@ -2819,25 +3503,25 @@ export default function TeacherMasterDashboard() {
                                             </p>
                                             {isRight ? (
                                               <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex-shrink-0">
-                                                +{qItem.marks} Marks
+                                                +{qItem.marks} {t.marksShort}
                                               </span>
                                             ) : (
                                               <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 flex-shrink-0">
-                                                0 Marks
+                                                0 {t.marksShort}
                                               </span>
                                             )}
                                           </div>
 
                                           <p className={`text-xs ${isRight ? 'text-emerald-400' : 'text-red-400'}`}>
-                                            Student Selected:{' '}
+                                            {t.studentSelectedLabel}:{' '}
                                             <strong>
-                                              {hasAnswered ? (qItem.options?.[chosenIdx] || `Option ${chosenIdx + 1}`) : '(Timed Out / Unanswered)'}
+                                              {hasAnswered ? (qItem.options?.[chosenIdx] || `${t.optionLabel} ${chosenIdx + 1}`) : t.timedOutUnanswered}
                                             </strong>
                                           </p>
 
                                           {!isRight && (
                                             <p className="text-[11px] text-emerald-400">
-                                              Correct Answer: <strong>{qItem.options?.[qItem.correct_option]}</strong>
+                                              {t.correctAnswerLabel}: <strong>{qItem.options?.[qItem.correct_option]}</strong>
                                             </p>
                                           )}
                                         </div>
@@ -2849,12 +3533,12 @@ export default function TeacherMasterDashboard() {
                                 <div className="p-4 rounded-2xl bg-[#131c31] border border-slate-700/60 space-y-3">
                                   <div className="flex items-center gap-2 text-xs font-bold text-white">
                                     <MessageSquare className="w-4 h-4 text-blue-400" />
-                                    <span>Teacher Remark &amp; Score Review for &quot;{res.quizzes?.title}&quot;</span>
+                                    <span>{t.teacherRemarkReviewTitle} &quot;{res.quizzes?.title}&quot;</span>
                                   </div>
 
                                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                                     <div>
-                                      <label className="text-[10px] text-slate-400 font-semibold block mb-1">Final Marks</label>
+                                      <label className="text-[10px] text-slate-400 font-semibold block mb-1">{t.finalMarksLabel}</label>
                                       <input
                                         type="number"
                                         value={scoreInputs[res.id] ?? res.score}
@@ -2864,11 +3548,11 @@ export default function TeacherMasterDashboard() {
                                     </div>
                                     <div className="sm:col-span-3">
                                       <label className="text-[10px] text-slate-400 font-semibold block mb-1">
-                                        Teacher Remark / Comment (Included in Parent PDF Report &amp; Student Hub)
+                                        {t.teacherRemarkInputLabel}
                                       </label>
                                       <input
                                         type="text"
-                                        placeholder="e.g. Good progress! Review Unit 2 theory questions carefully."
+                                        placeholder={t.teacherRemarkPlaceholder}
                                         value={remarkInputs[res.id] ?? ''}
                                         onChange={(e) => setRemarkInputs((prev) => ({ ...prev, [res.id]: e.target.value }))}
                                         className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -2884,7 +3568,7 @@ export default function TeacherMasterDashboard() {
                                       className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                                     >
                                       {savingFeedbackId === res.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                      <span>Save Remark &amp; Marks</span>
+                                      <span>{t.saveRemarkMarksBtn}</span>
                                     </button>
                                   </div>
                                 </div>
@@ -2899,12 +3583,12 @@ export default function TeacherMasterDashboard() {
 
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-blue-400" /> Zoom Class Attendance History (By Class)
+                    <Calendar className="w-4 h-4 text-blue-400" /> {t.zoomAttendanceHistory}
                   </h4>
 
                   {studentAttendanceLogs.length === 0 ? (
                     <div className="p-4 rounded-2xl bg-[#070b14] border border-slate-800 text-center text-slate-500 text-xs">
-                      No attendance records found.
+                      {t.noAttendanceRecords}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -2944,29 +3628,29 @@ export default function TeacherMasterDashboard() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-[#0c1322] border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-bold text-white">Create New Class</h3>
+            <h3 className="text-base font-bold text-white">{t.createNewClass}</h3>
             <form onSubmit={handleCreateCourse} className="space-y-3">
               <input
-                type="text" placeholder="Class Name (e.g. 2026 A/L Biology)"
+                type="text" placeholder={t.classNamePlaceholder}
                 value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white" required
               />
               <input
-                type="text" placeholder="Grade (e.g. Grade 13 / 2026 A/L)"
+                type="text" placeholder={t.gradePlaceholder}
                 value={newGrade} onChange={(e) => setNewGrade(e.target.value)}
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
               />
               <input
-                type="number" placeholder="Monthly Fee (e.g. 2500)"
+                type="number" placeholder={t.monthlyFeePlaceholder}
                 value={newFee} onChange={(e) => setNewFee(e.target.value)}
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white"
               />
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer">
-                  Cancel
+                  {t.cancel}
                 </button>
                 <button type="submit" disabled={isSubmittingCourse} className="px-5 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold cursor-pointer">
-                  Create Class
+                  {t.createClassBtn}
                 </button>
               </div>
             </form>

@@ -8,8 +8,10 @@ import {
   Download, ShieldCheck, PlaySquare, 
   Lock, X, CreditCard, AlertCircle, LogOut, KeyRound, Smartphone, Upload, Loader2,
   ShieldAlert, ArrowRight, MessageSquare, Play, Pause, RotateCcw, RotateCw,
-  Volume2, VolumeX, Maximize
+  Volume2, VolumeX, Maximize, Globe
 } from 'lucide-react';
+
+type Lang = 'en' | 'ta';
 
 declare global {
   interface Window {
@@ -17,6 +19,287 @@ declare global {
     onYouTubeIframeAPIReady?: () => void;
   }
 }
+
+const TAMIL_MONTHS = [
+  'ஜனவரி', 'பிப்ரவரி', 'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்',
+  'ஜூலை', 'ஆகஸ்ட்', 'செப்டம்பர்', 'அக்டோபர்', 'நவம்பர்', 'டிசம்பர்'
+];
+
+const STUDENT_UI_TEXT = {
+  en: {
+    // Login Screen
+    loginTagline: 'Student Portal Login • Education changes the world',
+    identifierLabel: 'Index Number or WhatsApp Number',
+    identifierPlaceholder: 'e.g. ST-001 or 0771234567',
+    passwordLabel: 'Password',
+    passwordHint: "* If you don't know your password, please enter your WhatsApp phone number.",
+    verifyingBtn: 'Verifying...',
+    loginBtn: 'Login to Student Hub',
+    deviceSecurityFooter: 'Hardware 1-Device Security Active',
+    deviceLockedError: '⚠️ Your account is locked to a different device. Please contact your teacher to unlock your device.',
+
+    // Loading & Header
+    verifyingAccount: 'Verifying student account...',
+    deviceVerifiedBadge: '1 Device Verified',
+    logoutBtn: 'Logout',
+
+    // Unenrolled
+    notEnrolledTitle: 'You are not enrolled in any class yet.',
+    notEnrolledDesc: 'Please contact your teacher at Science Hub - Jaffna to get your Index Number registered for the class.',
+
+    // Payment & Fees Banner
+    classFeesSuffix: 'Class Fees',
+    freeCardActiveMsg: 'Free Card Active — Full access granted to all classes and materials.',
+    bothMonthsPaidPrefix: 'Payment verified for both',
+    andWord: 'and',
+    fullAccessActiveSuffix: '! Full access active.',
+    nextMonthPendingPrefix: 'Your bank slip for',
+    nextMonthPendingSuffix: 'is Pending approval. Current classes remain active.',
+    paymentReminderTitle: 'Payment Reminder:',
+    paymentReminderPart1: 'Please submit your',
+    paymentReminderPart2: 'class fee',
+    paymentReminderPart3: 'Grace period runs until the',
+    paymentReminderPart4: '5th of',
+    paymentReminderPart5: ', after which access will lock.',
+    currentMonthApprovedPrefix: 'Payment verified for',
+    currentMonthApprovedSuffix: '. Full access active.',
+    tempExtensionPrefix: 'Teacher Temporary Access granted until',
+    tempExtensionMid: '. Please upload your',
+    tempExtensionSuffix: 'slip before that date.',
+    currentMonthPendingPrefix: 'Bank slip for',
+    currentMonthPendingMid: 'is Pending approval.',
+    graceActiveUntilPrefix: 'Grace period access is active until the 5th of',
+    unlockOnceApproved: 'Lessons will unlock once approved.',
+    finalReminderTitle: 'Final Reminder (Grace Period 1st–5th):',
+    finalReminderPart1: 'Please upload your',
+    finalReminderPart2: 'fee',
+    finalReminderPart3: 'before the',
+    finalReminderPart4: '5th',
+    finalReminderPart5: '. Access will lock after the 5th.',
+    rejectedPrefix: 'Bank slip for',
+    rejectedSuffix: 'was rejected. Please upload a valid slip',
+    toUnlockLessons: 'to unlock lessons.',
+    accessLockedTitle: 'Access Locked:',
+    accessLockedPart1: 'The deadline (5th of',
+    accessLockedPart2: ') has passed. Upload your bank slip for',
+    accessLockedPart3: 'to restore access.',
+    btnPaid: 'Paid',
+    btnPending: 'Pending',
+    btnUploading: 'Uploading...',
+    btnSubmitSlip: 'Submit Slip',
+    slipUploadedAlert: (monthLabel: string) =>
+      `Bank slip for ${monthLabel} uploaded successfully! Waiting for teacher approval.`,
+
+    // Live Zoom Class
+    scheduledDurationPrefix: 'Scheduled Duration:',
+    minsUnit: 'mins',
+    minStayRequiredPrefix: 'Minimum stay required for Present mark:',
+    zoomReadyHint: 'Once the Zoom session is ready, click Join Class to connect with your personal verified entry.',
+    personalZoomLockPrefix: 'Personal Single-User Zoom Access • Display Name Locked to',
+    lockedPaymentRequired: 'Locked • Monthly Payment Required',
+    generatingPersonalEntry: 'Generating Personal Entry...',
+    joinLiveClassBtn: 'Join Live Class (Protected Entry)',
+    attendanceVerifiedBadge: (mins: number) => `Attendance Verified (${mins}m)!`,
+    verifyingAttendanceBadge: (stay: number, req: number) =>
+      `Verifying Attendance: ${stay} / ${req} mins completed (Keep this tab open during class)`,
+    joinLockedAlert: (monthLabel: string) =>
+      `Access Locked: The monthly fee payment window (25th of last month to 5th of ${monthLabel}) has ended. Please upload your bank slip for ${monthLabel} or contact your teacher.`,
+
+    // Recordings, Tutes, Quizzes
+    pastRecordingsTitle: 'Past Recordings',
+    noRecordings: 'No recordings available.',
+    watchLessonBtn: 'Watch Lesson',
+    lockedPaymentShort: 'Locked (Payment Required)',
+    tutesHandoutsTitle: 'Tutes & Handouts',
+    noTutes: 'No tutes uploaded yet.',
+    paymentRequiredDownloadTitle: 'Monthly payment required to download',
+    examsQuizzesTitle: 'Exams & Quizzes',
+    noExamsQuizzes: 'No exams or quizzes available.',
+    strictOnlineExamLabel: 'Online Exam',
+    practiceQuizLabel: 'Quiz',
+    scoreLabel: 'Score',
+    perQShort: 'Q',
+    minsShort: 'Mins',
+    lockedShort: 'Locked',
+    completedBadge: 'Completed',
+    startExamBtn: 'Start Exam',
+    retakeQuizBtn: 'Retake Quiz',
+    startQuizBtn: 'Start Quiz',
+    examLockedAlert: (monthLabel: string) =>
+      `Access Locked: Please upload your bank slip for ${monthLabel} or contact your teacher to take online exams.`,
+    alreadyCompletedExamAlert: 'You have already completed this Online Exam. Only one attempt is permitted.',
+    noQuestionsAddedAlert: 'Questions have not been added to this exam/quiz yet.',
+
+    // Video Player Modal
+    protectedStreamBadge: 'Science Hub - Jaffna Protected Stream',
+    pauseBtn: 'Pause',
+    playBtn: 'Play',
+    rewindTitle: 'Rewind 10 seconds',
+    forwardTitle: 'Forward 10 seconds',
+    speedLabel: 'Speed:',
+    fullscreenTitle: 'Fullscreen',
+
+    // Exam & Quiz Modal
+    perQuestionHeaderInfo: (curr: number, total: number) =>
+      `Question ${curr} of ${total} • Locked Auto-Advance Mode`,
+    wholeExamHeaderInfo: (total: number) =>
+      `${total} Questions • Anti-Cheat Guard Active`,
+    closeBtn: 'Close',
+    cheatStrikeMax: '⚠️ Security Violation (3/3): Exam auto-submitted due to repeated tab switching.',
+    cheatStrikeWarn: (strike: number) =>
+      `⚠️ Anti-Cheat Warning (${strike}/3): Do not switch tabs or leave the exam window! On 3 warnings your exam will auto-submit.`,
+    submittedSuffix: 'Submitted!',
+    recordedForReviewMsg: "Your answers have been recorded for your teacher's review at Science Hub - Jaffna.",
+    questionLabel: 'Question',
+    marksLabel: 'Marks',
+    typeAnswerBelow: 'Type your answer below:',
+    writeAnswerPlaceholder: 'Write your answer here...',
+    saveNextQuestionBtn: 'Save & Next Question (Cannot Return)',
+    submitFinalAnswersBtn: 'Submit Final Answers',
+    submittedForReviewBadge: 'Submitted for Review',
+    correctBadge: 'Correct',
+    incorrectBadge: 'Incorrect',
+    expectedAnswerLabel: 'Expected Answer:',
+    submitAnswersBtn: 'Submit Answers'
+  },
+
+  ta: {
+    // Login Screen
+    loginTagline: 'மாணவர் போர்டல் உள்நுழைவு • கல்வி உலகை மாற்றும்',
+    identifierLabel: 'சுட்டெண் (Index Number) அல்லது WhatsApp எண்',
+    identifierPlaceholder: 'உதா: ST-001 அல்லது 0771234567',
+    passwordLabel: 'கடவுச்சொல்',
+    passwordHint: '* உங்கள் கடவுச்சொல் தெரியாவிட்டால், உங்கள் WhatsApp தொலைபேசி எண்ணை உள்ளிடவும்.',
+    verifyingBtn: 'சரிபார்க்கப்படுகிறது...',
+    loginBtn: 'மாணவர் மையத்தில் உள்நுழையவும்',
+    deviceSecurityFooter: '1-சாதன வன்பொருள் பாதுகாப்பு செயலில் உள்ளது',
+    deviceLockedError: '⚠️ உங்கள் கணக்கு வேறொரு சாதனத்துடன் பூட்டப்பட்டுள்ளது. உங்கள் சாதனப் பூட்டை நீக்க ஆசிரியரைத் தொடர்பு கொள்ளவும்.',
+
+    // Loading & Header
+    verifyingAccount: 'மாணவர் கணக்கு சரிபார்க்கப்படுகிறது...',
+    deviceVerifiedBadge: '1 சாதனம் சரிபார்க்கப்பட்டது',
+    logoutBtn: 'வெளியேறு',
+
+    // Unenrolled
+    notEnrolledTitle: 'நீங்கள் இதுவரை எந்த வகுப்பிலும் இணைக்கப்படவில்லை.',
+    notEnrolledDesc: 'வகுப்பில் உங்கள் சுட்டெண்ணைப் (Index Number) பதிவு செய்ய Science Hub - Jaffna ஆசிரியரைத் தொடர்பு கொள்ளவும்.',
+
+    // Payment & Fees Banner
+    classFeesSuffix: 'வகுப்புக் கட்டணம்',
+    freeCardActiveMsg: 'இலவச அட்டை (Free Card) செயலில் உள்ளது — அனைத்து வகுப்புகள் மற்றும் கற்றல் வளங்களுக்கு முழு அணுகல் வழங்கப்பட்டுள்ளது.',
+    bothMonthsPaidPrefix: 'இரு மாதங்களுக்கும் கட்டணம் உறுதிப்படுத்தப்பட்டுள்ளது:',
+    andWord: 'மற்றும்',
+    fullAccessActiveSuffix: '! முழு அணுகல் செயலில் உள்ளது.',
+    nextMonthPendingPrefix: 'உங்கள் வங்கிப் பற்றுச்சீட்டு அனுமதிக்காக நிலுவையில் உள்ளது:',
+    nextMonthPendingSuffix: '. தற்போதைய வகுப்புகள் தொடர்ந்தும் செயலில் உள்ளன.',
+    paymentReminderTitle: 'கட்டண நினைவூட்டல்:',
+    paymentReminderPart1: 'தயவுசெய்து உங்கள்',
+    paymentReminderPart2: 'மாத வகுப்புக் கட்டணத்தை',
+    paymentReminderPart3: 'செலுத்தவும். சலுகைக் காலம்',
+    paymentReminderPart4: '5 ஆம் திகதி',
+    paymentReminderPart5: 'வரை உள்ளது; அதன் பின்னர் அணுகல் பூட்டப்படும்.',
+    currentMonthApprovedPrefix: 'கட்டணம் உறுதிப்படுத்தப்பட்டுள்ளது:',
+    currentMonthApprovedSuffix: '. முழு அணுகல் செயலில் உள்ளது.',
+    tempExtensionPrefix: 'ஆசிரியரின் தற்காலிக அணுகல் வழங்கப்பட்டுள்ள இறுதித் திகதி:',
+    tempExtensionMid: '. அத்திகதிக்கு முன் உங்கள்',
+    tempExtensionSuffix: 'மாதப் பற்றுச்சீட்டைப் பதிவேற்றவும்.',
+    currentMonthPendingPrefix: 'வங்கிப் பற்றுச்சீட்டு அனுமதிக்காக நிலுவையில் உள்ளது:',
+    currentMonthPendingMid: '.',
+    graceActiveUntilPrefix: '5 ஆம் திகதி வரை சலுகைக் கால அணுகல் செயலில் உள்ளது:',
+    unlockOnceApproved: 'அனுமதிக்கப்பட்டவுடன் பாடங்கள் திறக்கப்படும்.',
+    finalReminderTitle: 'இறுதி நினைவூட்டல் (சலுகைக் காலம் 1–5 திகதி):',
+    finalReminderPart1: 'தயவுசெய்து 5 ஆம் திகதிக்கு முன் உங்கள்',
+    finalReminderPart2: 'மாதக் கட்டணத்தை',
+    finalReminderPart3: 'பதிவேற்றவும்.',
+    finalReminderPart4: '5 ஆம் திகதிக்குப் பிறகு',
+    finalReminderPart5: 'அணுகல் பூட்டப்படும்.',
+    rejectedPrefix: 'வங்கிப் பற்றுச்சீட்டு நிராகரிக்கப்பட்டது:',
+    rejectedSuffix: '. சரியான பற்றுச்சீட்டை',
+    toUnlockLessons: 'பதிவேற்றி பாடங்களைத் திறக்கவும்.',
+    accessLockedTitle: 'அணுகல் பூட்டப்பட்டுள்ளது:',
+    accessLockedPart1: 'இறுதித் திகதி (5 ஆம் திகதி -',
+    accessLockedPart2: ') முடிந்துவிட்டது. அணுகலை மீண்டும் பெற',
+    accessLockedPart3: 'மாதத்திற்கான வங்கிப் பற்றுச்சீட்டைப் பதிவேற்றவும்.',
+    btnPaid: 'செலுத்தப்பட்டது',
+    btnPending: 'நிலுவையில்',
+    btnUploading: 'பதிவேற்றப்படுகிறது...',
+    btnSubmitSlip: 'பற்றுச்சீட்டைச் சமர்ப்பி',
+    slipUploadedAlert: (monthLabel: string) =>
+      `${monthLabel} மாதத்திற்கான வங்கிப் பற்றுச்சீட்டு வெற்றிகரமாகப் பதிவேற்றப்பட்டது! ஆசிரியரின் அனுமதிக்காகக் காத்திருக்கிறது.`,
+
+    // Live Zoom Class
+    scheduledDurationPrefix: 'திட்டமிடப்பட்ட நேரம்:',
+    minsUnit: 'நிமிடங்கள்',
+    minStayRequiredPrefix: 'வருகை (Present) பதிவு செய்யத் தேவையான குறைந்தபட்ச நேரம்:',
+    zoomReadyHint: 'Zoom வகுப்பு தயாரானதும், உங்கள் தனிப்பட்ட உறுதிப்படுத்தப்பட்ட நுழைவு மூலம் இணைய "நேரடி வகுப்பில் இணை" என்பதைக் கிளிக் செய்யவும்.',
+    personalZoomLockPrefix: 'தனிப்பட்ட ஒரு-பயனர் Zoom அணுகல் • காட்சிப் பெயர் இவ்வாறு பூட்டப்பட்டுள்ளது:',
+    lockedPaymentRequired: 'பூட்டப்பட்டுள்ளது • மாதாந்தக் கட்டணம் தேவை',
+    generatingPersonalEntry: 'தனிப்பட்ட நுழைவு உருவாக்கப்படுகிறது...',
+    joinLiveClassBtn: 'நேரடி வகுப்பில் இணை (பாதுகாக்கப்பட்ட நுழைவு)',
+    attendanceVerifiedBadge: (mins: number) => `வருகை உறுதிப்படுத்தப்பட்டது (${mins} நிமிடம்)!`,
+    verifyingAttendanceBadge: (stay: number, req: number) =>
+      `வருகை சரிபார்க்கப்படுகிறது: ${stay} / ${req} நிமிடங்கள் நிறைவடைந்துள்ளன (வகுப்பின் போது இந்தத் தாவலைத் திறந்து வைக்கவும்)`,
+    joinLockedAlert: (monthLabel: string) =>
+      `அணுகல் பூட்டப்பட்டுள்ளது: மாதாந்தக் கட்டணம் செலுத்தும் காலம் (கடந்த மாதம் 25 முதல் ${monthLabel} 5 வரை) முடிவடைந்துள்ளது. தயவுசெய்து ${monthLabel} மாதத்திற்கான வங்கிப் பற்றுச்சீட்டைப் பதிவேற்றவும் அல்லது ஆசிரியரைத் தொடர்பு கொள்ளவும்.`,
+
+    // Recordings, Tutes, Quizzes
+    pastRecordingsTitle: 'கடந்த பாடப் பதிவுகள்',
+    noRecordings: 'பாடப் பதிவுகள் எதுவும் இல்லை.',
+    watchLessonBtn: 'பாடத்தைப் பார்',
+    lockedPaymentShort: 'பூட்டப்பட்டுள்ளது (கட்டணம் தேவை)',
+    tutesHandoutsTitle: 'பயிற்சித் தாள்கள் & குறிப்புகள்',
+    noTutes: 'இதுவரை பயிற்சித் தாள்கள் எதுவும் பதிவேற்றப்படவில்லை.',
+    paymentRequiredDownloadTitle: 'பதிவிறக்க மாதாந்தக் கட்டணம் செலுத்த வேண்டும்',
+    examsQuizzesTitle: 'பரீட்சைகள் & வினாவிடைகள்',
+    noExamsQuizzes: 'பரீட்சைகள் அல்லது வினாவிடைகள் எதுவும் இல்லை.',
+    strictOnlineExamLabel: 'இணையப் பரீட்சை',
+    practiceQuizLabel: 'வினாவிடை',
+    scoreLabel: 'புள்ளி',
+    perQShort: 'வினா',
+    minsShort: 'நிமிடம்',
+    lockedShort: 'பூட்டப்பட்டுள்ளது',
+    completedBadge: 'நிறைவடைந்தது',
+    startExamBtn: 'பரீட்சையைத் தொடங்கு',
+    retakeQuizBtn: 'மீண்டும் செய்',
+    startQuizBtn: 'வினாவிடையைத் தொடங்கு',
+    examLockedAlert: (monthLabel: string) =>
+      `அணுகல் பூட்டப்பட்டுள்ளது: இணையப் பரீட்சைகளில் பங்கேற்க ${monthLabel} மாதத்திற்கான வங்கிப் பற்றுச்சீட்டைப் பதிவேற்றவும் அல்லது ஆசிரியரைத் தொடர்பு கொள்ளவும்.`,
+    alreadyCompletedExamAlert: 'நீங்கள் ஏற்கனவே இந்த இணையப் பரீட்சையை முடித்துவிட்டீர்கள். ஒரு முயற்சிக்கு மட்டுமே அனுமதி உண்டு.',
+    noQuestionsAddedAlert: 'இந்தப் பரீட்சை / வினாவிடைக்கு இன்னும் வினாக்கள் சேர்க்கப்படவில்லை.',
+
+    // Video Player Modal
+    protectedStreamBadge: 'Science Hub - Jaffna பாதுகாக்கப்பட்ட ஒளிபரப்பு',
+    pauseBtn: 'இடைநிறுத்து',
+    playBtn: 'இயக்கு',
+    rewindTitle: '10 வினாடிகள் பின்னோக்கி',
+    forwardTitle: '10 வினாடிகள் முன்னோக்கி',
+    speedLabel: 'வேகம்:',
+    fullscreenTitle: 'முழுத்திரை',
+
+    // Exam & Quiz Modal
+    perQuestionHeaderInfo: (curr: number, total: number) =>
+      `வினா ${curr} / ${total} • தானாக அடுத்த வினாவிற்குச் செல்லும் முறை`,
+    wholeExamHeaderInfo: (total: number) =>
+      `${total} வினாக்கள் • மோசடித் தடுப்பு செயலில் உள்ளது`,
+    closeBtn: 'மூடு',
+    cheatStrikeMax: '⚠️ பாதுகாப்பு மீறல் (3/3): மீண்டும் மீண்டும் தாவல்களை (Tabs) மாற்றியதால் பரீட்சை தானாகவே சமர்ப்பிக்கப்பட்டது.',
+    cheatStrikeWarn: (strike: number) =>
+      `⚠️ மோசடித் தடுப்பு எச்சரிக்கை (${strike}/3): தாவல்களை மாற்றவோ பரீட்சை சாளரத்தை விட்டு வெளியேறவோ வேண்டாம்! 3 எச்சரிக்கைகளில் பரீட்சை தானாகவே சமர்ப்பிக்கப்படும்.`,
+    submittedSuffix: 'சமர்ப்பிக்கப்பட்டது!',
+    recordedForReviewMsg: 'Science Hub - Jaffna ஆசிரியரின் மதிப்பாய்விற்காக உங்கள் விடைகள் பதிவு செய்யப்பட்டுள்ளன.',
+    questionLabel: 'வினா',
+    marksLabel: 'புள்ளிகள்',
+    typeAnswerBelow: 'உங்கள் விடையைக் கீழே தட்டச்சு செய்யவும்:',
+    writeAnswerPlaceholder: 'உங்கள் விடையை இங்கே எழுதவும்...',
+    saveNextQuestionBtn: 'சேமித்து அடுத்த வினாவிற்குச் செல் (திரும்ப முடியாது)',
+    submitFinalAnswersBtn: 'இறுதி விடைகளைச் சமர்ப்பி',
+    submittedForReviewBadge: 'மதிப்பாய்விற்குச் சமர்ப்பிக்கப்பட்டது',
+    correctBadge: 'சரி',
+    incorrectBadge: 'தவறு',
+    expectedAnswerLabel: 'எதிர்பார்க்கப்படும் விடை:',
+    submitAnswersBtn: 'விடைகளைச் சமர்ப்பி'
+  }
+} as const;
 
 // Deterministic Hardware + Browser Fingerprint Generator
 function generateHardwareFingerprint(): string {
@@ -91,10 +374,14 @@ function getColomboDateInfo() {
   return { todayStr, currentMonth, dayOfMonth, nextMonth };
 }
 
-function formatMonthLabel(ym: string): string {
+function formatMonthLabel(ym: string, lang: Lang = 'en'): string {
   if (!ym || !ym.includes('-')) return ym;
   const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, (m || 1) - 1, 1);
+  const monthIndex = (m || 1) - 1;
+  if (lang === 'ta') {
+    return `${TAMIL_MONTHS[monthIndex] || ''} ${y}`;
+  }
+  const d = new Date(y, monthIndex, 1);
   return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
@@ -111,6 +398,9 @@ function getSelectableBillingMonths(baseYm: string): string[] {
 }
 
 export default function StudentPortal() {
+  const [lang, setLang] = useState<Lang>('en');
+  const t = STUDENT_UI_TEXT[lang];
+
   const [dateInfo, setDateInfo] = useState({ todayStr: '', currentMonth: '', dayOfMonth: 1, nextMonth: '' });
   const { todayStr, currentMonth, dayOfMonth, nextMonth } = dateInfo;
 
@@ -189,9 +479,13 @@ export default function StudentPortal() {
   const isUnlocked = isFreeCard || hasValidExtension || isWithinGracePeriod || isCurrentMonthApproved;
 
   useEffect(() => {
+    const savedLang = localStorage.getItem('lms_student_lang');
+    if (savedLang === 'ta' || savedLang === 'en') {
+      setLang(savedLang);
+    }
+
     const info = getColomboDateInfo();
     setDateInfo(info);
-    // From the 25th onwards, default the slip upload month selector to the upcoming month
     setSelectedBillingMonth(info.dayOfMonth >= 25 ? info.nextMonth : info.currentMonth);
 
     const savedStudent = localStorage.getItem('lms_student_session');
@@ -207,6 +501,11 @@ export default function StudentPortal() {
       setLoading(false);
     }
   }, []);
+
+  const handleLanguageChange = (newLang: Lang) => {
+    setLang(newLang);
+    localStorage.setItem('lms_student_lang', newLang);
+  };
 
   // Initialize Protected YouTube IFrame API Player
   useEffect(() => {
@@ -431,7 +730,8 @@ export default function StudentPortal() {
       await supabase.from('students').update({ device_id: currentDeviceId }).eq('id', stu.id);
     } else if (stu.device_id !== currentDeviceId) {
       handleLogout();
-      setLoginError('⚠️ Your account is locked to a different device. Please contact your teacher to unlock your device.');
+      const savedLang = (localStorage.getItem('lms_student_lang') as Lang) || 'en';
+      setLoginError(STUDENT_UI_TEXT[savedLang].deviceLockedError);
       setLoading(false);
       return;
     }
@@ -545,7 +845,7 @@ export default function StudentPortal() {
 
   const handleJoinClass = async () => {
     if (!isUnlocked) {
-      alert(`Access Locked: The monthly fee payment window (25th of last month to 5th of ${formatMonthLabel(currentMonth)}) has ended. Please upload your bank slip for ${formatMonthLabel(currentMonth)} or contact your teacher.`);
+      alert(t.joinLockedAlert(formatMonthLabel(currentMonth, lang)));
       return;
     }
 
@@ -630,7 +930,7 @@ export default function StudentPortal() {
         setStudentSlips((prev) => [insertedSlip, ...prev]);
       }
       setSlipFile(null);
-      alert(`Bank slip for ${formatMonthLabel(targetMonth)} uploaded successfully! Waiting for teacher approval.`);
+      alert(t.slipUploadedAlert(formatMonthLabel(targetMonth, lang)));
     } catch (err: any) {
       alert('Upload Error: ' + err.message);
     } finally {
@@ -640,12 +940,12 @@ export default function StudentPortal() {
 
   const handleStartQuiz = async (quiz: any) => {
     if (!isUnlocked) {
-      alert(`Access Locked: Please upload your bank slip for ${formatMonthLabel(currentMonth)} or contact your teacher to take online exams.`);
+      alert(t.examLockedAlert(formatMonthLabel(currentMonth, lang)));
       return;
     }
 
     if (quiz.assessment_type === 'Online Exam' && mySubmissionsMap[quiz.id]) {
-      alert('You have already completed this Online Exam. Only one attempt is permitted.');
+      alert(t.alreadyCompletedExamAlert);
       return;
     }
 
@@ -672,7 +972,7 @@ export default function StudentPortal() {
         document.documentElement.requestFullscreen().catch(() => {});
       }
     } else {
-      alert('Questions have not been added to this exam/quiz yet.');
+      alert(t.noQuestionsAddedAlert);
     }
   };
 
@@ -722,12 +1022,10 @@ export default function StudentPortal() {
         setTabStrikes((prev) => {
           const nextStrike = prev + 1;
           if (nextStrike >= 3) {
-            setCheatAlertMsg('⚠️ Security Violation (3/3): Exam auto-submitted due to repeated tab switching.');
+            setCheatAlertMsg(t.cheatStrikeMax);
             handleSubmitQuiz(nextStrike);
           } else {
-            setCheatAlertMsg(
-              `⚠️ Anti-Cheat Warning (${nextStrike}/3): Do not switch tabs or leave the exam window! On 3 warnings your exam will auto-submit.`
-            );
+            setCheatAlertMsg(t.cheatStrikeWarn(nextStrike));
           }
           return nextStrike;
         });
@@ -751,7 +1049,7 @@ export default function StudentPortal() {
       document.removeEventListener('paste', preventCheatingAction);
       document.removeEventListener('contextmenu', preventCheatingAction);
     };
-  }, [activeQuiz, quizSubmitted]);
+  }, [activeQuiz, quizSubmitted, lang]);
 
   const handleNextPerQuestion = () => {
     if (!activeQuiz) return;
@@ -826,6 +1124,22 @@ export default function StudentPortal() {
     return (
       <div className="min-h-screen bg-[#070b14] flex flex-col justify-center items-center p-6 text-white font-sans selection:bg-purple-500 selection:text-white">
         <div className="w-full max-w-md bg-[#0c1322] border border-slate-800/90 rounded-3xl p-8 shadow-2xl space-y-6">
+          {/* Top Language Switcher on Login Card */}
+          <div className="flex justify-end">
+            <div className="flex items-center gap-1.5 bg-[#070b14] border border-slate-700 hover:border-emerald-500/50 rounded-xl px-2.5 py-1.5 transition">
+              <Globe className="w-3.5 h-3.5 text-emerald-400" />
+              <select
+                value={lang}
+                onChange={(e) => handleLanguageChange(e.target.value as Lang)}
+                aria-label="Select Language"
+                className="bg-transparent text-xs font-bold text-slate-200 focus:outline-none cursor-pointer"
+              >
+                <option value="en" className="bg-[#0c1322] text-white">English</option>
+                <option value="ta" className="bg-[#0c1322] text-white">தமிழ்</option>
+              </select>
+            </div>
+          </div>
+
           <div className="text-center space-y-2">
             <img
               src="/logo.jpg"
@@ -833,7 +1147,7 @@ export default function StudentPortal() {
               className="w-16 h-16 rounded-full object-cover bg-white p-0.5 mx-auto shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-400/50"
             />
             <h2 className="text-xl font-black text-white">Science Hub - Jaffna</h2>
-            <p className="text-xs text-slate-400">Student Portal Login • Education changes the world</p>
+            <p className="text-xs text-slate-400">{t.loginTagline}</p>
           </div>
 
           {loginError && (
@@ -845,10 +1159,10 @@ export default function StudentPortal() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Index Number or WhatsApp Number</label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">{t.identifierLabel}</label>
               <input
                 type="text"
-                placeholder="e.g. ST-001 or 0771234567"
+                placeholder={t.identifierPlaceholder}
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
@@ -857,7 +1171,7 @@ export default function StudentPortal() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">Password</label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">{t.passwordLabel}</label>
               <input
                 type="password"
                 placeholder="••••••••"
@@ -866,7 +1180,7 @@ export default function StudentPortal() {
                 className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 transition"
                 required
               />
-              <span className="text-[10px] text-slate-500 mt-1 block">* If you don&apos;t know your password, please enter your WhatsApp phone number.</span>
+              <span className="text-[10px] text-slate-500 mt-1 block">{t.passwordHint}</span>
             </div>
 
             <button
@@ -875,13 +1189,13 @@ export default function StudentPortal() {
               className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer disabled:opacity-50"
             >
               <KeyRound className="w-4 h-4" />
-              <span>{isLoggingIn ? 'Verifying...' : 'Login to Student Hub'}</span>
+              <span>{isLoggingIn ? t.verifyingBtn : t.loginBtn}</span>
             </button>
           </form>
 
           <div className="pt-2 text-center border-t border-slate-800">
             <span className="text-[11px] text-slate-500 flex items-center justify-center gap-1">
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Hardware 1-Device Security Active
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> {t.deviceSecurityFooter}
             </span>
           </div>
         </div>
@@ -894,7 +1208,7 @@ export default function StudentPortal() {
     return (
       <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center text-slate-400 space-y-3">
         <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-xs font-mono">Verifying student account...</p>
+        <p className="text-xs font-mono">{t.verifyingAccount}</p>
       </div>
     );
   }
@@ -907,7 +1221,7 @@ export default function StudentPortal() {
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans selection:bg-purple-500 selection:text-white pb-12">
       {/* Top Header */}
-      <header className="border-b border-slate-800/80 px-6 py-4 bg-[#0c1322] sticky top-0 z-30 flex items-center justify-between shadow-md">
+      <header className="border-b border-slate-800/80 px-4 md:px-6 py-4 bg-[#0c1322] sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 shadow-md">
         <div className="flex items-center gap-3">
           <img
             src="/logo.jpg"
@@ -925,16 +1239,31 @@ export default function StudentPortal() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs">
-            <Lock className="w-3.5 h-3.5" /> 1 Device Verified
+        <div className="flex items-center gap-2.5">
+          {/* Language Dropdown */}
+          <div className="flex items-center gap-1.5 bg-[#070b14] border border-slate-700 hover:border-emerald-500/50 rounded-xl px-3 py-1.5 transition">
+            <Globe className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+            <select
+              value={lang}
+              onChange={(e) => handleLanguageChange(e.target.value as Lang)}
+              aria-label="Select Language"
+              className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
+            >
+              <option value="en" className="bg-[#0c1322] text-white">English</option>
+              <option value="ta" className="bg-[#0c1322] text-white">தமிழ்</option>
+            </select>
+          </div>
+
+          <span className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs">
+            <Lock className="w-3.5 h-3.5" /> {t.deviceVerifiedBadge}
           </span>
+
           <button
             onClick={handleLogout}
             className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-red-600 hover:text-white text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Logout</span>
+            <span>{t.logoutBtn}</span>
           </button>
         </div>
       </header>
@@ -944,8 +1273,8 @@ export default function StudentPortal() {
         {!currentCourse ? (
           <div className="p-8 text-center bg-[#0c1322] border border-slate-800 rounded-3xl space-y-3">
             <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
-            <h3 className="font-bold text-base text-white">You are not enrolled in any class yet.</h3>
-            <p className="text-xs text-slate-400">Please contact your teacher at Science Hub - Jaffna to get your Index Number registered for the class.</p>
+            <h3 className="font-bold text-base text-white">{t.notEnrolledTitle}</h3>
+            <p className="text-xs text-slate-400">{t.notEnrolledDesc}</p>
           </div>
         ) : (
           <>
@@ -975,78 +1304,78 @@ export default function StudentPortal() {
                         ? 'text-emerald-400'
                         : 'text-purple-400'
                     }`} />
-                    <h3 className="font-bold text-sm text-white">{currentCourse.title} - Class Fees</h3>
+                    <h3 className="font-bold text-sm text-white">{currentCourse.title} - {t.classFeesSuffix}</h3>
                     {currentMonth && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                        {formatMonthLabel(currentMonth)}
+                        {formatMonthLabel(currentMonth, lang)}
                       </span>
                     )}
                   </div>
                   
                   {isFreeCard ? (
                     <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Free Card Active — Full access granted to all classes and materials.
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> {t.freeCardActiveMsg}
                     </div>
                   ) : isAdvanceReminderWindow ? (
                     isNextMonthApproved ? (
                       <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
                         <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                         <span>
-                          Payment verified for both <strong>{formatMonthLabel(currentMonth)}</strong> and <strong>{formatMonthLabel(nextMonth)}</strong>! Full access active.
+                          {t.bothMonthsPaidPrefix} <strong>{formatMonthLabel(currentMonth, lang)}</strong> {t.andWord} <strong>{formatMonthLabel(nextMonth, lang)}</strong>{t.fullAccessActiveSuffix}
                         </span>
                       </div>
                     ) : nextMonthSlip?.status === 'Pending' ? (
                       <div className="text-xs text-amber-300 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/30 inline-flex items-center gap-1.5">
                         <Clock className="w-4 h-4 flex-shrink-0 text-amber-400" />
                         <span>
-                          Your bank slip for <strong>{formatMonthLabel(nextMonth)}</strong> is Pending approval. Current classes remain active.
+                          {t.nextMonthPendingPrefix} <strong>{formatMonthLabel(nextMonth, lang)}</strong> {t.nextMonthPendingSuffix}
                         </span>
                       </div>
                     ) : (
                       <div className="text-xs text-amber-300 bg-amber-500/15 px-3 py-2 rounded-lg border border-amber-500/40 inline-flex items-center gap-1.5">
                         <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400 animate-pulse" />
                         <span>
-                          <strong>Payment Reminder:</strong> Please submit your <strong className="text-white">{formatMonthLabel(nextMonth)}</strong> class fee (<strong className="text-emerald-400 font-mono">Rs. {currentCourse.monthly_fee}/-</strong>). Grace period runs until the <strong>5th of {formatMonthLabel(nextMonth)}</strong>, after which access will lock.
+                          <strong>{t.paymentReminderTitle}</strong> {t.paymentReminderPart1} <strong className="text-white">{formatMonthLabel(nextMonth, lang)}</strong> {t.paymentReminderPart2} (<strong className="text-emerald-400 font-mono">Rs. {currentCourse.monthly_fee}/-</strong>). {t.paymentReminderPart3} <strong>{t.paymentReminderPart4} {formatMonthLabel(nextMonth, lang)}</strong>{t.paymentReminderPart5}
                         </span>
                       </div>
                     )
                   ) : isCurrentMonthApproved ? (
                     <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Payment verified for {formatMonthLabel(currentMonth)}. Full access active.
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> {t.currentMonthApprovedPrefix} {formatMonthLabel(currentMonth, lang)}{t.currentMonthApprovedSuffix}
                     </div>
                   ) : hasValidExtension ? (
                     <div className="text-xs text-blue-300 bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20 inline-flex items-center gap-1.5">
                       <Clock className="w-4 h-4 flex-shrink-0 text-blue-400" />
                       <span>
-                        Teacher Temporary Access granted until <strong>{enrollmentInfo.access_until}</strong>. Please upload your {formatMonthLabel(currentMonth)} slip before that date.
+                        {t.tempExtensionPrefix} <strong>{enrollmentInfo.access_until}</strong>{t.tempExtensionMid} {formatMonthLabel(currentMonth, lang)} {t.tempExtensionSuffix}
                       </span>
                     </div>
                   ) : currentMonthSlip?.status === 'Pending' ? (
                     <div className="text-xs text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 inline-flex items-center gap-1.5">
                       <Clock className="w-4 h-4 flex-shrink-0" />
                       <span>
-                        Bank slip for {formatMonthLabel(currentMonth)} is Pending approval. {isWithinGracePeriod ? `Grace period access is active until the 5th of ${formatMonthLabel(currentMonth)}.` : 'Lessons will unlock once approved.'}
+                        {t.currentMonthPendingPrefix} {formatMonthLabel(currentMonth, lang)} {t.currentMonthPendingMid} {isWithinGracePeriod ? `${t.graceActiveUntilPrefix} ${formatMonthLabel(currentMonth, lang)}.` : t.unlockOnceApproved}
                       </span>
                     </div>
                   ) : isWithinGracePeriod ? (
                     <div className="text-xs text-amber-300 bg-amber-500/15 px-3 py-2 rounded-lg border border-amber-500/30 inline-flex items-center gap-1.5">
                       <Clock className="w-4 h-4 flex-shrink-0 text-amber-400 animate-pulse" />
                       <span>
-                        <strong>Final Reminder (Grace Period 1st–5th):</strong> Please upload your <strong className="text-white">{formatMonthLabel(currentMonth)}</strong> fee (<strong className="text-emerald-400 font-mono">Rs. {currentCourse.monthly_fee}/-</strong>) before the <strong>5th</strong>. Access will lock after the 5th.
+                        <strong>{t.finalReminderTitle}</strong> {t.finalReminderPart1} <strong className="text-white">{formatMonthLabel(currentMonth, lang)}</strong> {t.finalReminderPart2} (<strong className="text-emerald-400 font-mono">Rs. {currentCourse.monthly_fee}/-</strong>) {t.finalReminderPart3} <strong>{t.finalReminderPart4}</strong>{t.finalReminderPart5}
                       </span>
                     </div>
                   ) : currentMonthSlip?.status === 'Rejected' ? (
                     <div className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20 inline-flex items-center gap-1.5">
                       <XCircle className="w-4 h-4 flex-shrink-0" />
                       <span>
-                        Bank slip for {formatMonthLabel(currentMonth)} was rejected. Please upload a valid slip (Rs. {currentCourse.monthly_fee}/-) to unlock lessons.
+                        {t.rejectedPrefix} {formatMonthLabel(currentMonth, lang)} {t.rejectedSuffix} (Rs. {currentCourse.monthly_fee}/-) {t.toUnlockLessons}
                       </span>
                     </div>
                   ) : (
                     <div className="text-xs text-red-300 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20 inline-flex items-center gap-1.5">
                       <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
                       <span>
-                        <strong>Access Locked:</strong> The deadline (5th of {formatMonthLabel(currentMonth)}) has passed. Upload your bank slip for <strong>{formatMonthLabel(currentMonth)}</strong> (Rs. {currentCourse.monthly_fee}/-) to restore access.
+                        <strong>{t.accessLockedTitle}</strong> {t.accessLockedPart1} {formatMonthLabel(currentMonth, lang)}{t.accessLockedPart2} <strong>{formatMonthLabel(currentMonth, lang)}</strong> (Rs. {currentCourse.monthly_fee}/-) {t.accessLockedPart3}
                       </span>
                     </div>
                   )}
@@ -1062,7 +1391,7 @@ export default function StudentPortal() {
                     >
                       {selectableMonths.map((ym) => (
                         <option key={ym} value={ym}>
-                          {formatMonthLabel(ym)}
+                          {formatMonthLabel(ym, lang)}
                         </option>
                       ))}
                     </select>
@@ -1084,12 +1413,12 @@ export default function StudentPortal() {
                       {isUploadingSlip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                       <span>
                         {selectedMonthSlip?.status === 'Approved'
-                          ? 'Paid'
+                          ? t.btnPaid
                           : selectedMonthSlip?.status === 'Pending'
-                          ? 'Pending'
+                          ? t.btnPending
                           : isUploadingSlip
-                          ? 'Uploading...'
-                          : 'Submit Slip'}
+                          ? t.btnUploading
+                          : t.btnSubmitSlip}
                       </span>
                     </button>
                   </form>
@@ -1109,8 +1438,8 @@ export default function StudentPortal() {
                   </h2>
                   <p className="text-xs text-slate-400">
                     {activeMeeting 
-                      ? `Scheduled Duration: ${activeMeeting.duration_minutes} mins • Minimum stay required for Present mark: ${minRequiredMinutes} mins.`
-                      : 'Once the Zoom session is ready, click Join Class to connect with your personal verified entry.'}
+                      ? `${t.scheduledDurationPrefix} ${activeMeeting.duration_minutes} ${t.minsUnit} • ${t.minStayRequiredPrefix} ${minRequiredMinutes} ${t.minsUnit}.`
+                      : t.zoomReadyHint}
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
@@ -1122,7 +1451,7 @@ export default function StudentPortal() {
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 bg-[#070b14] p-3 rounded-xl border border-slate-800/60 w-fit">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                   <span>
-                    Personal Single-User Zoom Access • Display Name Locked to <strong className="text-purple-400 font-mono">[{studentInfo?.indexNo}]</strong>
+                    {t.personalZoomLockPrefix} <strong className="text-purple-400 font-mono">[{studentInfo?.indexNo}]</strong>
                   </span>
                 </div>
               )}
@@ -1134,7 +1463,7 @@ export default function StudentPortal() {
                     className="px-6 py-3 rounded-2xl font-bold text-xs flex items-center gap-2 bg-slate-800/80 border border-slate-700 text-slate-400 cursor-not-allowed"
                   >
                     <Lock className="w-4 h-4 text-amber-400" />
-                    <span>Locked • Monthly Payment Required</span>
+                    <span>{t.lockedPaymentRequired}</span>
                   </button>
                 ) : (
                   <button
@@ -1147,20 +1476,20 @@ export default function StudentPortal() {
                     }`}
                   >
                     {isJoiningZoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
-                    <span>{isJoiningZoom ? 'Generating Personal Entry...' : 'Join Live Class (Protected Entry)'}</span>
+                    <span>{isJoiningZoom ? t.generatingPersonalEntry : t.joinLiveClassBtn}</span>
                   </button>
                 )}
 
                 {attendanceStatus === 'Present' && isUnlocked && (
                   <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-3 py-2 rounded-xl border border-emerald-500/20">
-                    <CheckCircle2 className="w-4 h-4" /> Attendance Verified ({verifiedStayMinutes}m)!
+                    <CheckCircle2 className="w-4 h-4" /> {t.attendanceVerifiedBadge(verifiedStayMinutes)}
                   </span>
                 )}
 
                 {attendanceStatus && attendanceStatus !== 'Present' && isUnlocked && (
                   <span className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/20">
                     <Clock className="w-4 h-4 animate-pulse" />
-                    Verifying Attendance: {verifiedStayMinutes} / {minRequiredMinutes} mins completed (Keep this tab open during class)
+                    {t.verifyingAttendanceBadge(verifiedStayMinutes, minRequiredMinutes)}
                   </span>
                 )}
               </div>
@@ -1171,10 +1500,10 @@ export default function StudentPortal() {
               {/* Recordings */}
               <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  <PlaySquare className="w-4 h-4 text-red-400" /> Past Recordings ({recordings.length})
+                  <PlaySquare className="w-4 h-4 text-red-400" /> {t.pastRecordingsTitle} ({recordings.length})
                 </h3>
                 {recordings.length === 0 ? (
-                  <p className="text-xs text-slate-500">No recordings available.</p>
+                  <p className="text-xs text-slate-500">{t.noRecordings}</p>
                 ) : (
                   <div className="space-y-3 max-h-72 overflow-y-auto">
                     {recordings.map((rec) => (
@@ -1188,14 +1517,14 @@ export default function StudentPortal() {
                             }}
                             className="w-full py-2 rounded-xl bg-red-600/10 hover:bg-red-600 hover:text-white text-red-400 text-xs font-semibold transition cursor-pointer"
                           >
-                            Watch Lesson
+                            {t.watchLessonBtn}
                           </button>
                         ) : (
                           <button
                             disabled
                             className="w-full py-2 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-not-allowed"
                           >
-                            <Lock className="w-3.5 h-3.5 text-amber-400" /> Locked (Payment Required)
+                            <Lock className="w-3.5 h-3.5 text-amber-400" /> {t.lockedPaymentShort}
                           </button>
                         )}
                       </div>
@@ -1207,10 +1536,10 @@ export default function StudentPortal() {
               {/* Tutes */}
               <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-emerald-400" /> Tutes &amp; Handouts ({materials.length})
+                  <BookOpen className="w-4 h-4 text-emerald-400" /> {t.tutesHandoutsTitle} ({materials.length})
                 </h3>
                 {materials.length === 0 ? (
-                  <p className="text-xs text-slate-500">No tutes uploaded yet.</p>
+                  <p className="text-xs text-slate-500">{t.noTutes}</p>
                 ) : (
                   <div className="space-y-3 max-h-72 overflow-y-auto">
                     {materials.map((m) => (
@@ -1221,7 +1550,7 @@ export default function StudentPortal() {
                             <Download className="w-4 h-4" />
                           </a>
                         ) : (
-                          <span title="Monthly payment required to download" className="p-2 rounded-lg bg-slate-800 text-slate-500 cursor-not-allowed">
+                          <span title={t.paymentRequiredDownloadTitle} className="p-2 rounded-lg bg-slate-800 text-slate-500 cursor-not-allowed">
                             <Lock className="w-4 h-4 text-amber-400" />
                           </span>
                         )}
@@ -1234,10 +1563,10 @@ export default function StudentPortal() {
               {/* Exams & Quizzes */}
               <div className="bg-[#0c1322] border border-slate-800/80 p-5 rounded-3xl space-y-4 shadow-xl">
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4 text-amber-400" /> Exams &amp; Quizzes ({quizzes.length})
+                  <HelpCircle className="w-4 h-4 text-amber-400" /> {t.examsQuizzesTitle} ({quizzes.length})
                 </h3>
                 {quizzes.length === 0 ? (
-                  <p className="text-xs text-slate-500">No exams or quizzes available.</p>
+                  <p className="text-xs text-slate-500">{t.noExamsQuizzes}</p>
                 ) : (
                   <div className="space-y-3 max-h-80 overflow-y-auto">
                     {quizzes.map((q) => {
@@ -1255,11 +1584,11 @@ export default function StudentPortal() {
                                   : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                               }`}
                             >
-                              {q.assessment_type || 'Quiz'}
+                              {isExam ? t.strictOnlineExamLabel : t.practiceQuizLabel}
                             </span>
                             {prevSub && (
                               <span className="text-[10px] font-mono font-bold text-emerald-400">
-                                Score: {prevSub.score}/{q.total_marks || 100}
+                                {t.scoreLabel}: {prevSub.score}/{q.total_marks || 100}
                               </span>
                             )}
                           </div>
@@ -1275,7 +1604,7 @@ export default function StudentPortal() {
 
                           <div className="flex items-center justify-between pt-1">
                             <span className="text-[10px] text-slate-400 font-mono">
-                              {isPerQ ? `${q.per_question_seconds || 60}s / Q` : `${q.duration_minutes} Mins`}
+                              {isPerQ ? `${q.per_question_seconds || 60}s / ${t.perQShort}` : `${q.duration_minutes} ${t.minsShort}`}
                             </span>
 
                             {!isUnlocked ? (
@@ -1283,11 +1612,11 @@ export default function StudentPortal() {
                                 disabled
                                 className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 text-[11px] font-bold flex items-center gap-1 cursor-not-allowed"
                               >
-                                <Lock className="w-3 h-3 text-amber-400" /> Locked
+                                <Lock className="w-3 h-3 text-amber-400" /> {t.lockedShort}
                               </button>
                             ) : isExam && prevSub ? (
                               <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
-                                Completed
+                                {t.completedBadge}
                               </span>
                             ) : (
                               <button
@@ -1298,7 +1627,7 @@ export default function StudentPortal() {
                                     : 'bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-900'
                                 }`}
                               >
-                                {isExam ? 'Start Exam' : prevSub ? 'Retake Quiz' : 'Start Quiz'}
+                                {isExam ? t.startExamBtn : prevSub ? t.retakeQuizBtn : t.startQuizBtn}
                               </button>
                             )}
                           </div>
@@ -1323,7 +1652,7 @@ export default function StudentPortal() {
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-bold text-xs text-red-400 flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-lg flex-shrink-0">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Science Hub - Jaffna Protected Stream
+                  <ShieldCheck className="w-3.5 h-3.5" /> {t.protectedStreamBadge}
                 </span>
                 <h4 className="text-xs font-bold text-white truncate">{activeVideoTitle}</h4>
               </div>
@@ -1402,13 +1731,13 @@ export default function StudentPortal() {
                       className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                     >
                       {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                      <span>{isPlaying ? 'Pause' : 'Play'}</span>
+                      <span>{isPlaying ? t.pauseBtn : t.playBtn}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => handleSkipVideo(-10)}
-                      title="Rewind 10 seconds"
+                      title={t.rewindTitle}
                       className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold flex items-center gap-1 transition cursor-pointer"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
@@ -1418,7 +1747,7 @@ export default function StudentPortal() {
                     <button
                       type="button"
                       onClick={() => handleSkipVideo(10)}
-                      title="Forward 10 seconds"
+                      title={t.forwardTitle}
                       className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold flex items-center gap-1 transition cursor-pointer"
                     >
                       <RotateCw className="w-3.5 h-3.5" />
@@ -1436,7 +1765,7 @@ export default function StudentPortal() {
 
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 bg-[#0c1322] border border-slate-800 rounded-xl px-2 py-1">
-                      <span className="text-[10px] text-slate-400 font-semibold">Speed:</span>
+                      <span className="text-[10px] text-slate-400 font-semibold">{t.speedLabel}</span>
                       {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
                         <button
                           key={rate}
@@ -1456,7 +1785,7 @@ export default function StudentPortal() {
                     <button
                       type="button"
                       onClick={handleToggleProtectedFullscreen}
-                      title="Fullscreen"
+                      title={t.fullscreenTitle}
                       className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
                     >
                       <Maximize className="w-4 h-4" />
@@ -1493,14 +1822,14 @@ export default function StudentPortal() {
                         : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                     }`}
                   >
-                    {activeQuiz.assessment_type || 'Quiz'}
+                    {activeQuiz.assessment_type === 'Online Exam' ? t.strictOnlineExamLabel : t.practiceQuizLabel}
                   </span>
                   <h3 className="font-bold text-sm text-white">{activeQuiz.title}</h3>
                 </div>
                 <span className="text-[10px] text-slate-400 font-mono">
                   {activeQuiz.timer_mode === 'per_question'
-                    ? `Question ${currentQuestionIdx + 1} of ${questions.length} • Locked Auto-Advance Mode`
-                    : `${questions.length} Questions • Anti-Cheat Guard Active`}
+                    ? t.perQuestionHeaderInfo(currentQuestionIdx + 1, questions.length)
+                    : t.wholeExamHeaderInfo(questions.length)}
                 </span>
               </div>
 
@@ -1520,7 +1849,7 @@ export default function StudentPortal() {
                   onClick={() => setActiveQuiz(null)}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
                 >
-                  Close
+                  {t.closeBtn}
                 </button>
               )}
             </div>
@@ -1536,12 +1865,14 @@ export default function StudentPortal() {
               {quizSubmitted && (
                 <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/40 p-6 rounded-2xl text-center space-y-2">
                   <Award className="w-12 h-12 text-yellow-400 mx-auto" />
-                  <h4 className="text-lg font-bold text-white">{activeQuiz.assessment_type || 'Quiz'} Submitted!</h4>
+                  <h4 className="text-lg font-bold text-white">
+                    {activeQuiz.assessment_type === 'Online Exam' ? t.strictOnlineExamLabel : t.practiceQuizLabel} {t.submittedSuffix}
+                  </h4>
                   <p className="text-3xl font-black text-purple-300">
-                    Score: {score} / {questions.reduce((a, b) => a + (b.marks || 10), 0)}
+                    {t.scoreLabel}: {score} / {questions.reduce((a, b) => a + (b.marks || 10), 0)}
                   </p>
                   <p className="text-[11px] text-slate-400">
-                    Your answers have been recorded for your teacher&apos;s review at Science Hub - Jaffna.
+                    {t.recordedForReviewMsg}
                   </p>
                 </div>
               )}
@@ -1554,8 +1885,8 @@ export default function StudentPortal() {
                   <div className="space-y-5">
                     <div className="bg-[#070b14] border border-slate-800/80 p-6 rounded-2xl space-y-4">
                       <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-                        <span>Question {currentQuestionIdx + 1} / {questions.length}</span>
-                        <span className="text-purple-400">{q.marks || 10} Marks</span>
+                        <span>{t.questionLabel} {currentQuestionIdx + 1} / {questions.length}</span>
+                        <span className="text-purple-400">{q.marks || 10} {t.marksLabel}</span>
                       </div>
 
                       <h5 className="font-semibold text-base text-white leading-relaxed">
@@ -1564,10 +1895,10 @@ export default function StudentPortal() {
 
                       {q.question_type === 'free_answer' ? (
                         <div className="space-y-2">
-                          <label className="text-[11px] text-slate-400 block">Type your answer below:</label>
+                          <label className="text-[11px] text-slate-400 block">{t.typeAnswerBelow}</label>
                           <textarea
                             rows={3}
-                            placeholder="Write your answer here..."
+                            placeholder={t.writeAnswerPlaceholder}
                             value={typeof studentAns === 'string' ? studentAns : ''}
                             onChange={(e) => setSelectedAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
                             className="w-full bg-[#0c1322] border border-slate-700 rounded-xl p-3.5 text-xs text-white focus:outline-none focus:border-purple-500 select-text"
@@ -1603,8 +1934,8 @@ export default function StudentPortal() {
                     >
                       <span>
                         {currentQuestionIdx + 1 < questions.length
-                          ? 'Save & Next Question (Cannot Return)'
-                          : 'Submit Final Answers'}
+                          ? t.saveNextQuestionBtn
+                          : t.submitFinalAnswersBtn}
                       </span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
@@ -1635,15 +1966,15 @@ export default function StudentPortal() {
                             {quizSubmitted && (
                               isFree ? (
                                 <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20 flex-shrink-0">
-                                  Submitted for Review
+                                  {t.submittedForReviewBadge}
                                 </span>
                               ) : isCorrect ? (
                                 <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 flex-shrink-0">
-                                  <CheckCircle2 className="w-3 h-3" /> Correct
+                                  <CheckCircle2 className="w-3 h-3" /> {t.correctBadge}
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1 text-[10px] text-red-400 font-bold bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20 flex-shrink-0">
-                                  <XCircle className="w-3 h-3" /> Incorrect
+                                  <XCircle className="w-3 h-3" /> {t.incorrectBadge}
                                 </span>
                               )
                             )}
@@ -1654,14 +1985,14 @@ export default function StudentPortal() {
                               <textarea
                                 rows={2}
                                 disabled={quizSubmitted}
-                                placeholder="Type your answer here..."
+                                placeholder={t.writeAnswerPlaceholder}
                                 value={typeof studentAns === 'string' ? studentAns : ''}
                                 onChange={(e) => setSelectedAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
                                 className="w-full bg-[#0c1322] border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-purple-500 select-text"
                               />
                               {quizSubmitted && q.sample_answer && (
                                 <p className="text-[11px] text-emerald-400">
-                                  Expected Answer: <strong>{q.sample_answer}</strong>
+                                  {t.expectedAnswerLabel} <strong>{q.sample_answer}</strong>
                                 </p>
                               )}
                             </div>
@@ -1701,7 +2032,7 @@ export default function StudentPortal() {
                       onClick={() => handleSubmitQuiz(tabStrikes)}
                       className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition shadow-lg shadow-purple-600/30 cursor-pointer"
                     >
-                      Submit Answers
+                      {t.submitAnswersBtn}
                     </button>
                   )}
                 </>
