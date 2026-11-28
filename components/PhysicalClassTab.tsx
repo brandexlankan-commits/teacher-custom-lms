@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   Users, Plus, Trash2, Calendar, Award, Printer,
-  Search, CheckCircle2, XCircle, Loader2, ClipboardList, FileSpreadsheet
+  Search, CheckCircle2, XCircle, Loader2, ClipboardList, FileSpreadsheet, Send, ExternalLink
 } from 'lucide-react';
 
 type Lang = 'en' | 'ta';
@@ -24,7 +24,7 @@ const TAMIL_SHORT_MONTHS = [
 const TEXT = {
   en: {
     headerTitle: 'Physical Class Students & Manual Reports',
-    headerDesc: 'Add physical class students, record manual attendance & paper marks, and generate official Parent PDF Reports.',
+    headerDesc: 'Add physical class students, record manual attendance & paper marks, and share visual Parent Reports via WhatsApp.',
     addStudentTitle: 'Add Physical Class Student',
     fullName: 'Student Full Name',
     fullNamePh: 'e.g. Kavishka Perera',
@@ -40,8 +40,11 @@ const TEXT = {
     searchPh: 'Search by name, ID, or class...',
     noStudents: 'No physical class students added yet.',
     selectPromptTitle: 'Select a Physical Student',
-    selectPromptDesc: 'Click on a student from the left list to enter manual attendance, exam marks, and download their Parent PDF Report.',
-    downloadPdfBtn: 'Download / Print Parent PDF',
+    selectPromptDesc: 'Click on a student from the left list to enter manual attendance, exam marks, and send their Visual Progress Report.',
+    previewReportBtn: 'Preview Report',
+    downloadPdfBtn: 'Print / Save PDF',
+    sendWhatsappBtn: 'Send via WhatsApp',
+    noWhatsappAlert: 'No valid WhatsApp number saved for this student.',
     totalClassesCard: 'Classes Attended',
     totalExamsCard: 'Papers / Exams',
     overallAvgCard: 'Overall Average',
@@ -66,7 +69,7 @@ const TEXT = {
     examDate: 'Exam Date',
     marksObtained: 'Marks Obtained',
     totalMarks: 'Total Marks',
-    teacherRemark: 'Teacher Remark (Shown in Parent PDF)',
+    teacherRemark: 'Teacher Remark (Shown in Parent Report)',
     teacherRemarkPh: 'e.g. Very good improvement in structured questions.',
     saveMarksBtn: 'Save Exam Marks',
     marksHistoryTitle: 'Recorded Exam & Paper Marks',
@@ -114,7 +117,7 @@ const TEXT = {
   },
   ta: {
     headerTitle: 'நேரடி வகுப்பு (Physical Class) மாணவர்கள் & அறிக்கைகள்',
-    headerDesc: 'நேரடி வகுப்பு மாணவர்களைச் சேர்த்து, வருகை மற்றும் பரீட்சைப் புள்ளிகளை உள்ளிட்டு பெற்றோர் PDF அறிக்கையை உருவாக்கவும்.',
+    headerDesc: 'நேரடி வகுப்பு மாணவர்களைச் சேர்த்து, வருகை மற்றும் பரீட்சைப் புள்ளிகளை உள்ளிட்டு WhatsApp மூலம் அறிக்கையை அனுப்பவும்.',
     addStudentTitle: 'நேரடி வகுப்பு மாணவரைச் சேர்',
     fullName: 'மாணவர் முழுப் பெயர்',
     fullNamePh: 'உதா: கவிஷ்க பெரேரா',
@@ -130,8 +133,11 @@ const TEXT = {
     searchPh: 'பெயர், ஐடி அல்லது வகுப்பு மூலம் தேடு...',
     noStudents: 'இதுவரை நேரடி வகுப்பு மாணவர்கள் எவரும் சேர்க்கப்படவில்லை.',
     selectPromptTitle: 'ஒரு மாணவரைத் தேர்ந்தெடுக்கவும்',
-    selectPromptDesc: 'வருகை, பரீட்சைப் புள்ளிகள் மற்றும் பெற்றோர் PDF அறிக்கையைப் பெற இடதுபுறப் பட்டியலில் உள்ள மாணவரைக் கிளிக் செய்யவும்.',
-    downloadPdfBtn: 'பெற்றோர் PDF அறிக்கையைப் பதிவிறக்கு / அச்சிடு',
+    selectPromptDesc: 'வருகை, பரீட்சைப் புள்ளிகள் மற்றும் பெற்றோர் அறிக்கையை அனுப்ப இடதுபுறப் பட்டியலில் உள்ள மாணவரைக் கிளிக் செய்யவும்.',
+    previewReportBtn: 'அறிக்கையைப் பார்',
+    downloadPdfBtn: 'PDF அச்சிடு / சேமி',
+    sendWhatsappBtn: 'WhatsApp இல் அனுப்பு',
+    noWhatsappAlert: 'இந்த மாணவருக்கு சரியான WhatsApp இலக்கம் பதிவு செய்யப்படவில்லை.',
     totalClassesCard: 'வகுப்பு வருகை',
     totalExamsCard: 'பரீட்சைகள் / வினாத்தாள்கள்',
     overallAvgCard: 'மொத்த சராசரி',
@@ -156,7 +162,7 @@ const TEXT = {
     examDate: 'பரீட்சைத் திகதி',
     marksObtained: 'பெற்ற புள்ளிகள்',
     totalMarks: 'மொத்தப் புள்ளிகள்',
-    teacherRemark: 'ஆசிரியர் கருத்து (பெற்றோர் PDF அறிக்கையில் இடம்பெறும்)',
+    teacherRemark: 'ஆசிரியர் கருத்து (பெற்றோர் அறிக்கையில் இடம்பெறும்)',
     teacherRemarkPh: 'உதா: கட்டமைப்பு வினாக்களில் நல்ல முன்னேற்றம்.',
     saveMarksBtn: 'புள்ளிகளைச் சேமி',
     marksHistoryTitle: 'பதிவு செய்யப்பட்ட பரீட்சைப் புள்ளிகள்',
@@ -218,6 +224,14 @@ function escapeHtml(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function formatSriLankaWhatsAppNumber(raw: string): string | null {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (!digits || digits.length < 9) return null;
+  if (digits.startsWith('94')) return digits;
+  if (digits.startsWith('0')) return `94${digits.slice(1)}`;
+  return `94${digits}`;
 }
 
 export default function PhysicalClassTab({
@@ -689,6 +703,46 @@ export default function PhysicalClassTab({
     printWindow.document.close();
   };
 
+  const handlePreviewPublicReport = () => {
+    if (!selectedStudent) return;
+    const reportUrl = `${window.location.origin}/report/${selectedStudent.id}?lang=${lang}`;
+    window.open(reportUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleSendViaWhatsApp = () => {
+    if (!selectedStudent) return;
+
+    const waPhone = formatSriLankaWhatsAppNumber(selectedStudent.whatsapp_number);
+    if (!waPhone) {
+      alert(t.noWhatsappAlert);
+      return;
+    }
+
+    const analytics = getAnalytics();
+    const reportUrl = `${window.location.origin}/report/${selectedStudent.id}?lang=${lang}`;
+
+    const latestExam = marksLogs[0];
+    const latestExamEn = latestExam
+      ? `\n📝 *Latest Exam:* ${latestExam.exam_title} (${latestExam.marks_obtained}/${latestExam.total_marks})${
+          latestExam.teacher_remark ? `\n💬 *Teacher Remark:* "${latestExam.teacher_remark}"` : ''
+        }`
+      : '';
+
+    const latestExamTa = latestExam
+      ? `\n📝 *சமீபத்திய பரீட்சை:* ${latestExam.exam_title} (${latestExam.marks_obtained}/${latestExam.total_marks})${
+          latestExam.teacher_remark ? `\n💬 *ஆசிரியர் கருத்து:* "${latestExam.teacher_remark}"` : ''
+        }`
+      : '';
+
+    const message =
+      lang === 'ta'
+        ? `*SCIENCE HUB - JAFFNA* 🎓\n\nவணக்கம்! உங்கள் பிள்ளை *${selectedStudent.full_name}* (ID: ${selectedStudent.index_number}) அவர்களின் நேரடி வகுப்பு முன்னேற்ற அறிக்கை (Progress Report) தயாராக உள்ளது.\n\n📚 *வகுப்பு:* ${selectedStudent.class_name}\n✅ *வகுப்பு வருகை:* ${analytics.presentCount} நாட்கள்\n📊 *மொத்த சராசரி:* ${analytics.overallAvg}%${latestExamTa}\n\n🔗 *முழுமையான வரைபட அறிக்கையைப் (Visual Report) பார்க்க கீழுள்ள இணைப்பை அழுத்தவும்:*\n${reportUrl}`
+        : `*SCIENCE HUB - JAFFNA* 🎓\n\nDear Parent,\nHere is the latest Physical Class Progress Summary for *${selectedStudent.full_name}* (ID: ${selectedStudent.index_number}).\n\n📚 *Class:* ${selectedStudent.class_name}\n✅ *Classes Attended:* ${analytics.presentCount} Days\n📊 *Overall Exam Average:* ${analytics.overallAvg}%${latestExamEn}\n\n🔗 *View Full Visual Progress Charts & Detailed Report:*\n${reportUrl}`;
+
+    const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const filteredStudents = students.filter((s) => {
     const q = searchQuery.toLowerCase();
     return (
@@ -840,7 +894,7 @@ export default function PhysicalClassTab({
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Manual Attendance, Marks & 1-Click Parent PDF */}
+        {/* RIGHT COLUMN: Manual Attendance, Marks & WhatsApp Visual Report Sharing */}
         <div className="lg:col-span-2">
           {!selectedStudent ? (
             <div className="bg-[#0c1322] border border-dashed border-slate-800 rounded-3xl p-12 text-center space-y-3 h-full flex flex-col items-center justify-center">
@@ -850,7 +904,7 @@ export default function PhysicalClassTab({
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Selected Student Header + 1-Click PDF Button */}
+              {/* Selected Student Header + Action Buttons */}
               <div className="bg-[#0c1322] border border-slate-800/80 p-6 rounded-3xl shadow-xl space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
@@ -865,14 +919,34 @@ export default function PhysicalClassTab({
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handlePrintPhysicalReport}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/30"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>{t.downloadPdfBtn}</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePreviewPublicReport}
+                      className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{t.previewReportBtn}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handlePrintPhysicalReport}
+                      className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-300" />
+                      <span>{t.downloadPdfBtn}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSendViaWhatsApp}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/30"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>{t.sendWhatsappBtn}</span>
+                    </button>
+                  </div>
                 </div>
 
                 {analytics && (
