@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import PhysicalClassTab from '@/components/PhysicalClassTab';
 import { 
   Users, BookOpen, Video, HelpCircle, Plus, 
   Settings, CheckCircle2, ExternalLink, 
@@ -11,7 +12,7 @@ import {
   Unlock, CreditCard, PlaySquare, FileText, Trash2,
   Copy, Key, BarChart3, Award, Calendar, X, LogOut, Upload, Clock,
   ShieldAlert, MessageSquare, ChevronDown, ChevronUp, Edit3, RefreshCw,
-  TrendingUp, TrendingDown, Minus, Printer, ShieldCheck, Globe
+  TrendingUp, TrendingDown, Minus, Printer, ShieldCheck, Globe, QrCode
 } from 'lucide-react';
 
 type Lang = 'en' | 'ta';
@@ -81,6 +82,7 @@ const UI_TEXT = {
     backToAllClasses: '← Back to all classes',
     liveMeetingActive: 'Live Meeting Active',
     tabZoom: 'Live Zoom Class',
+    tabPhysical: 'Physical Class',
     tabStudents: 'Student Management',
     tabRecordings: 'Lesson Recordings',
     tabContent: 'Tutes & Notes',
@@ -367,6 +369,7 @@ const UI_TEXT = {
     backToAllClasses: '← அனைத்து வகுப்புகளுக்கும் திரும்பு',
     liveMeetingActive: 'நேரடி வகுப்பு செயலில் உள்ளது',
     tabZoom: 'நேரடி Zoom வகுப்பு',
+    tabPhysical: 'நேரடி வகுப்பு (Physical)',
     tabStudents: 'மாணவர் நிர்வாகம்',
     tabRecordings: 'பாடப் பதிவுகள்',
     tabContent: 'பயிற்சித் தாள்கள் & குறிப்புகள்',
@@ -682,7 +685,7 @@ export default function TeacherMasterDashboard() {
 
   // Selected Course Management State
   const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
-  const [activeTab, setActiveTab] = useState<'zoom' | 'students' | 'recordings' | 'content' | 'quizzes'>('zoom');
+  const [activeTab, setActiveTab] = useState<'zoom' | 'physical' | 'students' | 'recordings' | 'content' | 'quizzes'>('zoom');
 
   // Student Flexible Payment & Access Override Modal States
   const [selectedStudentForAccess, setSelectedStudentForAccess] = useState<any | null>(null);
@@ -2190,6 +2193,15 @@ export default function TeacherMasterDashboard() {
               </button>
 
               <button
+                onClick={() => setActiveTab('physical')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  activeTab === 'physical' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <QrCode className="w-4 h-4" /> {t.tabPhysical}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('students')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'students' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-400 hover:text-white'
@@ -2327,6 +2339,16 @@ export default function TeacherMasterDashboard() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* TAB: PHYSICAL CLASS (QR ATTENDANCE & CARD MARKING) */}
+            {activeTab === 'physical' && (
+              <PhysicalClassTab
+                course={selectedCourse}
+                students={students}
+                lang={lang}
+                onRefreshCourse={() => loadCourseDetails(selectedCourse.id)}
+              />
             )}
 
             {/* TAB 2: STUDENT MANAGEMENT WITH FLEXIBLE ACCESS CONTROLS, REPORTS & MONTHLY SLIPS */}
