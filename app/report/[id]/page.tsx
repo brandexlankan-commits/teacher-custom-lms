@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import {
@@ -91,7 +91,7 @@ function formatShortMonth(date: Date, lang: Lang) {
   return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
 }
 
-export default function PublicStudentReportPage() {
+function ReportContent() {
   const params = useParams();
   const studentId = params?.id as string;
 
@@ -163,7 +163,6 @@ export default function PublicStudentReportPage() {
     );
   }
 
-  // Analytics Calculations
   const now = new Date();
   const thisMonth = now.getMonth();
   const thisYear = now.getFullYear();
@@ -208,7 +207,6 @@ export default function PublicStudentReportPage() {
   const chronologicalMarks = [...marks].reverse().slice(-10);
   const remarksList = marks.filter((m) => m.teacher_remark && m.teacher_remark.trim() !== '');
 
-  // Determine overall visual status badge
   const isImproving = scoreDiff > 0 || attDiff > 0 || overallAvg >= 75;
   const needsAttention = (overallAvg > 0 && overallAvg < 50) || (attendance.length > 0 && attendancePct < 60);
 
@@ -311,7 +309,6 @@ export default function PublicStudentReportPage() {
               <span className="text-2xl font-black text-blue-400">{attendancePct}%</span>
             </div>
 
-            {/* Visual Progress Bar */}
             <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-500"
@@ -319,7 +316,6 @@ export default function PublicStudentReportPage() {
               />
             </div>
 
-            {/* Month Comparison Pill */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
               <span className="text-slate-400">
                 {formatShortMonth(lastMonthDate, lang)}: <strong className="text-slate-200">{lastMonthAtt}d</strong> →{' '}
@@ -356,7 +352,6 @@ export default function PublicStudentReportPage() {
               <span className="text-2xl font-black text-emerald-400">{overallAvg}%</span>
             </div>
 
-            {/* Visual Progress Bar */}
             <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
@@ -370,7 +365,6 @@ export default function PublicStudentReportPage() {
               />
             </div>
 
-            {/* Month Comparison Pill */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
               <span className="text-slate-400">
                 {formatShortMonth(lastMonthDate, lang)}: <strong className="text-slate-200">{lastMonthAvg}%</strong> →{' '}
@@ -459,7 +453,6 @@ export default function PublicStudentReportPage() {
 
         {/* Detailed Tables Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Exam Results List */}
           <div className="bg-[#0c1322] border border-slate-800/90 rounded-3xl p-5 space-y-3 shadow-xl print:border-slate-300">
             <h4 className="text-sm font-black text-white print:text-slate-900">{t.examHistoryTitle}</h4>
             <div className="space-y-2">
@@ -486,7 +479,6 @@ export default function PublicStudentReportPage() {
             </div>
           </div>
 
-          {/* Attendance Log List */}
           <div className="bg-[#0c1322] border border-slate-800/90 rounded-3xl p-5 space-y-3 shadow-xl print:border-slate-300">
             <h4 className="text-sm font-black text-white print:text-slate-900">{t.attHistoryTitle}</h4>
             <div className="space-y-2">
@@ -518,5 +510,19 @@ export default function PublicStudentReportPage() {
         <p className="text-center text-[11px] text-slate-500 pt-4">{t.footerNote}</p>
       </div>
     </div>
+  );
+}
+
+export default function PublicStudentReportPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#060a13] text-slate-200 flex items-center justify-center p-6">
+          <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+        </div>
+      }
+    >
+      <ReportContent />
+    </Suspense>
   );
 }
